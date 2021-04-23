@@ -1,0 +1,110 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 23 Apr 2021 17:23:59 +0200
+Subject: [PATCH] feat: hide helpers in org.bukkit.entity.Player
+
+
+diff --git a/src/main/java/org/bukkit/entity/Player.java b/src/main/java/org/bukkit/entity/Player.java
+index a84ea92d02d34cd48174152e0391f1af6c6b5def..2ba0cfda0ca37f3aef9e57de6018fbaf79147bee 100644
+--- a/src/main/java/org/bukkit/entity/Player.java
++++ b/src/main/java/org/bukkit/entity/Player.java
+@@ -1,6 +1,7 @@
+ package org.bukkit.entity;
+ 
+ import java.net.InetSocketAddress;
++import java.util.Collection;
+ import java.util.Set; // Paper
+ import java.util.UUID;
+ import com.destroystokyo.paper.ClientOption; // Paper
+@@ -1201,6 +1202,38 @@ public interface Player extends HumanEntity, Conversable, OfflinePlayer, PluginM
+      */
+     public void hidePlayer(@NotNull Plugin plugin, @NotNull Player player);
+ 
++    // Matherion start
++    /**
++     * Hides everyone from this player.
++     *
++     * @param plugin Plugin that wants to hide the players
++     */
++    public void hideOthers(Plugin plugin);
++
++    /**
++     * Hides a collection of players from this player.
++     *
++     * @param plugin Plugin that wants to hide the players
++     * @param players Collection of players to hide from this player
++     */
++    public void hideOthers(Plugin plugin, Collection<? extends Player> players);
++
++    /**
++     * Hides this player from everyone
++     *
++     * @param plugin Plugin that wants to hide the player
++     */
++    public void hideFromOthers(Plugin plugin);
++
++    /**
++     * Hides this player from a collection of players.
++     *
++     * @param plugin Plugin that wants to hide the player
++     * @param players Collection of players to hide this player from
++     */
++    public void hideFromOthers(Plugin plugin, Collection<? extends Player> players);
++    // Matherion end
++
+     /**
+      * Allows this player to see a player that was previously hidden
+      *
+@@ -1215,11 +1248,51 @@ public interface Player extends HumanEntity, Conversable, OfflinePlayer, PluginM
+      * another another plugin had hidden the player too, then the player will
+      * remain hidden until the other plugin calls this method too.
+      *
+-     * @param plugin Plugin that wants to show the player
++     * @param plugin Plugin that wants to show the players
+      * @param player Player to show
+      */
+     public void showPlayer(@NotNull Plugin plugin, @NotNull Player player);
+ 
++    // Matherion start
++    /**
++     * Allows this player to see the provided collection of players if they
++     * were previously hidden. If another plugin had hidden the player too, then
++     * the player will remain hidden until the other player calls this method too.
++     *
++     * @param plugin Plugin that wants to show the players
++     * @param players Players that the player should be allowed to see
++     */
++    public void showOthers(Plugin plugin, Collection<? extends Player> players);
++
++    /**
++     * Allows this player to see everyone who was previously hidden. If
++     * another plugin had hidden the player too, then the player will remain
++     * hidden until the other plugin calls this method too.
++     *
++     * @param plugin Plugin that wants to show the player
++     */
++    public void showOthers(Plugin plugin);
++
++    /**
++     * Allows the provided collection of players too see this player if it was
++     * previously hidden for them. If another plugin had hidden this player too, then
++     * this player will remain hidden until the other player calls this method too.
++     *
++     * @param plugin Plugin that wants to show this player
++     * @param players Players that should be able to see the player
++     */
++    public void showToOthers(Plugin plugin, Collection<? extends Player> players);
++
++    /**
++     * Allows everyone to see this player if it was previously hidden for them.
++     * If another plugin had hidden this player too, then this player will remain
++     * hidden until the other plugin calls this method too.
++     *
++     * @param plugin Plugin that wants to show this player
++     */
++    public void showToOthers(Plugin plugin);
++    // Matherion end
++
+     /**
+      * Checks to see if a player has been hidden from this player
+      *

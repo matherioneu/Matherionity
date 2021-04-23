@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 23 Apr 2021 17:24:05 +0200
+Subject: [PATCH] feat: hide helpers in org.bukkit.entity.Player
+
+
+diff --git a/src/main/java/eu/matherion/server/menu/MenuBuilder.java b/src/main/java/eu/matherion/server/menu/MenuBuilder.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..abc0cfe95a2d270fa959e177f4db1b790f1b1b45
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/menu/MenuBuilder.java
+@@ -0,0 +1,5 @@
++package eu.matherion.server.menu;
++
++public class MenuBuilder {
++
++}
+diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+index 45e786565ac988abadffda2e7ba3ff1e2880b786..05dc70d52969d07faba2d34251cde8137912e706 100644
+--- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
++++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
+@@ -1349,6 +1349,40 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+         }
+     }
+ 
++    // Matherion start
++    public void hideOthers(Plugin plugin) {
++        hideOthers(plugin, plugin.getServer().getOnlinePlayers());
++    }
++
++    public void hideOthers(Plugin plugin, Collection<? extends Player> players) {
++        players.forEach(p -> hidePlayer(plugin, p));
++    }
++
++    public void hideFromOthers(Plugin plugin) {
++        hideFromOthers(plugin, plugin.getServer().getOnlinePlayers());
++    }
++
++    public void hideFromOthers(Plugin plugin, Collection<? extends Player> players) {
++        players.forEach(p -> p.hidePlayer(plugin, this));
++    }
++
++    public void showToOthers(Plugin plugin) {
++        showToOthers(plugin, plugin.getServer().getOnlinePlayers());
++    }
++
++    public void showToOthers(Plugin plugin, Collection<? extends Player> players) {
++        players.forEach(p -> p.showPlayer(plugin, this));
++    }
++
++    public void showOthers(Plugin plugin) {
++        showOthers(plugin, plugin.getServer().getOnlinePlayers());
++    }
++
++    public void showOthers(Plugin plugin, Collection<? extends Player> players) {
++        players.forEach(p -> showPlayer(plugin, p));
++    }
++    // Matherion end
++
+     @Override
+     @Deprecated
+     public void showPlayer(Player player) {
