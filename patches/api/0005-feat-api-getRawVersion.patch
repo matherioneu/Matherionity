@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 23 Apr 2021 20:21:07 +0200
+Subject: [PATCH] feat(api): getRawVersion()
+
+
+diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
+index b3e7b2a8eaa3980e34bc74a846320b7871dc6e4b..1df78ae3385802380f97b81e1a45df771f52d9f1 100644
+--- a/src/main/java/org/bukkit/Server.java
++++ b/src/main/java/org/bukkit/Server.java
+@@ -84,11 +84,22 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+     /**
+      * Gets the version string of this server implementation.
+      *
+-     * @return version of this server implementation
++     * @return version of this server implementation + MC version.
+      */
+     @NotNull
+     public String getVersion();
+ 
++    // Matherion start
++    /**
++     * Gets the version string of this server implementation,
++     * without the Minecraft version.
++     *
++     * @return version of this server implementation
++     */
++    @NotNull
++    public String getRawVersion();
++    // Matherion end
++
+     /**
+      * Gets the Bukkit version that this server is running.
+      *

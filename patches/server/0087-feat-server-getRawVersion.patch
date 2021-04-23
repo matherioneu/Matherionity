@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 23 Apr 2021 20:21:47 +0200
+Subject: [PATCH] feat(server): getRawVersion()
+
+
+diff --git a/src/main/java/eu/matherion/server/database/DatabaseConnection.java b/src/main/java/eu/matherion/server/database/DatabaseConnection.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e7b873541a4a216130a8b1d9a7d76dd671579c8f
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/database/DatabaseConnection.java
+@@ -0,0 +1,2 @@
++package eu.matherion.server.database;public class DatabaseConnection {
++}
+diff --git a/src/main/java/eu/matherion/server/database/DatabaseManager.java b/src/main/java/eu/matherion/server/database/DatabaseManager.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..5ba8ec1c1a7a50ed7d31f5ddeac002e461edd1a7
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/database/DatabaseManager.java
+@@ -0,0 +1,2 @@
++package eu.matherion.server.database;public class DatabaseManager {
++}
+diff --git a/src/main/java/eu/matherion/server/database/impl/HikariConnection.java b/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..7b6bf59068a722772dcd9bd587e2caf981d8006a
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
+@@ -0,0 +1,2 @@
++package eu.matherion.server.database.impl;public class HikariConnection {
++}
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index fd3333fef4112e6469ccd316ba2c82926c04e5db..6267b1e460d0d8787a2270511b79ce97fff003d9 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -232,7 +232,7 @@ import javax.annotation.Nullable; // Paper
+ import javax.annotation.Nonnull; // Paper
+ 
+ public final class CraftServer implements Server {
+-    private final String serverName = "Tuinity"; // Paper // Tuinity
++    private final String serverName = "Matherionity"; // Paper // Tuinity // Matherionity
+     private final String serverVersion;
+     private final String bukkitVersion = Versioning.getBukkitVersion();
+     private final Logger logger = Logger.getLogger("Minecraft");
+@@ -278,12 +278,7 @@ public final class CraftServer implements Server {
+     public CraftServer(DedicatedServer console, PlayerList playerList) {
+         this.console = console;
+         this.playerList = (DedicatedPlayerList) playerList;
+-        this.playerView = Collections.unmodifiableList(Lists.transform(playerList.players, new Function<EntityPlayer, CraftPlayer>() {
+-            @Override
+-            public CraftPlayer apply(EntityPlayer player) {
+-                return player.getBukkitEntity();
+-            }
+-        }));
++        this.playerView = Collections.unmodifiableList(Lists.transform(playerList.players, EntityPlayer::getBukkitEntity)); // Matherion - rewrote to lambda reference
+         this.serverVersion = CraftServer.class.getPackage().getImplementationVersion();
+ 
+         Bukkit.setServer(this);
+@@ -514,6 +509,11 @@ public final class CraftServer implements Server {
+         return serverVersion + " (MC: " + console.getVersion() + ")";
+     }
+ 
++    @Override
++    public String getRawVersion() {
++        return serverVersion;
++    }
++
+     @Override
+     public String getBukkitVersion() {
+         return bukkitVersion;
+@@ -585,6 +585,13 @@ public final class CraftServer implements Server {
+         // Paper end
+     }
+ 
++    // Matherion start
++    /**
++     * @deprecated use {@link EntityPlayer#getBukkitEntity()}
++     * @param entity EntityPlayer
++     * @return The Bukkit Entity
++     */
++    @Deprecated // Matherion end
+     public Player getPlayer(final EntityPlayer entity) {
+         return entity.getBukkitEntity();
+     }
