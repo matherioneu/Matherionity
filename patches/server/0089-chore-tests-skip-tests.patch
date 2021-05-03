@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 3 May 2021 15:36:00 +0200
+Subject: [PATCH] chore(tests): skip tests
+
+
+diff --git a/pom.xml b/pom.xml
+index 5baebe8d8788ba1f502fb60f7421e70441933023..8e41bda5972f9cc92b900fe93d9a03c044b92d03 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -405,7 +405,7 @@
+         <profile>
+             <id>development</id>
+             <properties>
+-                <skipTests>false</skipTests>
++                <skipTests>true</skipTests>
+             </properties>
+             <build>
+                 <plugins>
