@@ -1,0 +1,13 @@
+image: docker:latest
+
+stages:
+  - build
+
+maven-build:
+  image: maven:3-jdk-8
+  stage: build
+  script: "./tuinity jar"
+  artifacts:
+    paths:
+      - Tuinity-Server/target/*.jar
+      - Tuinity-API/target/*.jar

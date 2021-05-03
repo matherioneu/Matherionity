@@ -1,0 +1,1952 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 3 May 2021 14:05:51 +0200
+Subject: [PATCH] feat: init matherion changes, db, redis, menus
+
+
+diff --git a/pom.xml b/pom.xml
+index 6c200882954adc4831307f3d6dfa3202571fb30b..545c74f7b65bc839403d6c1a1d5cad1a9ab36d3c 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -3,22 +3,22 @@
+          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+     <modelVersion>4.0.0</modelVersion>
+     <parent>
+-        <groupId>com.tuinity</groupId>
+-        <artifactId>tuinity-parent</artifactId>
++        <groupId>eu.matherion</groupId>
++        <artifactId>matherionity-parent</artifactId>
+         <version>dev-SNAPSHOT</version>
+         <relativePath>../pom.xml</relativePath>
+     </parent>
+ 
+-    <artifactId>tuinity-api</artifactId>
++    <artifactId>matherionity-api</artifactId>
+     <version>1.16.5-R0.1-SNAPSHOT</version>
+     <packaging>jar</packaging>
+ 
+-    <name>Tuinity-API</name>
++    <name>matherionity-api</name>
+     <url>https://github.com/Spottedleaf/Tuinity</url>
+     <description>An enhanced plugin API for Minecraft servers.</description>
+ 
+     <properties>
+-        <!-- <skipTests>true</skipTests> Paper - This [was] not going to end well -->
++        <skipTests>true</skipTests>
+         <maven.compiler.source>1.8</maven.compiler.source>
+         <maven.compiler.target>1.8</maven.compiler.target>
+         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+@@ -161,6 +161,12 @@
+             <artifactId>asm-commons</artifactId>
+             <version>9.0</version>
+         </dependency>
++        <dependency>
++            <groupId>io.papermc</groupId>
++            <artifactId>minecraft-server</artifactId>
++            <version>1.16.5-SNAPSHOT</version>
++            <scope>compile</scope>
++        </dependency>
+     </dependencies>
+ 
+     <build>
+diff --git a/src/main/java/eu/matherion/api/ServerState.java b/src/main/java/eu/matherion/api/ServerState.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ee649489ee738bbd39da713423fdaef5841a3f18
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/ServerState.java
+@@ -0,0 +1,113 @@
++package eu.matherion.api;
++
++import org.jetbrains.annotations.Nullable;
++
++public class ServerState {
++
++    int id = 0;
++
++    String name = "";
++
++    @Nullable
++    TeamMode teamMode = TeamMode.TWO;
++
++    StateType stateType = StateType.WAITING;
++
++    boolean privateServer = false;
++
++    int online = 0;
++
++    int max = 0;
++
++    public ServerState() {
++    }
++
++    public ServerState(
++            int id,
++            String name,
++            @Nullable TeamMode teamMode,
++            StateType stateType,
++            boolean privateServer,
++            int online,
++            int max
++    ) {
++        this.id = id;
++        this.name = name;
++        this.stateType = stateType;
++        this.teamMode = teamMode;
++        this.privateServer = privateServer;
++        this.online = online;
++        this.max = max;
++    }
++
++    public ServerState(int id, String name, TeamMode teamMode, StateType stateTyp, boolean privateServer) {
++        this.id = id;
++        this.name = name;
++        this.teamMode = teamMode;
++        this.stateType = stateTyp;
++        this.privateServer = privateServer;
++    }
++
++    public int getId() {
++        return id;
++    }
++
++    public String getName() {
++        return name;
++    }
++
++    public StateType getStateType() {
++        return stateType;
++    }
++
++    public TeamMode getTeamMode() {
++        return teamMode;
++    }
++
++    public boolean isPrivateServer() {
++        return privateServer;
++    }
++
++    public int getOnline() {
++        return online;
++    }
++
++    public int getMax() {
++        return max;
++    }
++
++    public ServerState setId(int id) {
++        this.id = id;
++        return this;
++    }
++
++    public ServerState setName(String name) {
++        this.name = name;
++        return this;
++    }
++
++    public ServerState setStateType(StateType stateType) {
++        this.stateType = stateType;
++        return this;
++    }
++
++    public ServerState setTeamMode(TeamMode teamMode) {
++        this.teamMode = teamMode;
++        return this;
++    }
++
++    public ServerState setPrivateServer(boolean privateServer) {
++        this.privateServer = privateServer;
++        return this;
++    }
++
++    public ServerState setOnline(int online) {
++        this.online = online;
++        return this;
++    }
++
++    public ServerState setMax(int max) {
++        this.max = max;
++        return this;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/StateType.java b/src/main/java/eu/matherion/api/StateType.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..7063de885f0400d7256155536f01ac9309ff67a3
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/StateType.java
+@@ -0,0 +1,14 @@
++package eu.matherion.api;
++
++public enum StateType {
++    WAITING("Čekání na hráče"),
++    STARTING("Startuje"),
++    RUNNING("Ingame"),
++    ENDING("Konec");
++
++    private final String displayName;
++
++    StateType(String displayName) {
++        this.displayName = displayName;
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/eu/matherion/api/TeamMode.java b/src/main/java/eu/matherion/api/TeamMode.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..afd4538cf8483c6a01c04426d5856a2bf3820c23
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/TeamMode.java
+@@ -0,0 +1,15 @@
++package eu.matherion.api;
++
++public enum TeamMode {
++    TWO(2, 4),
++    FOUR(4, 4);
++
++    int maxPlayersInTeam;
++
++    int maxTeams;
++
++    TeamMode(int maxPlayersInTeam, int maxTeams) {
++        this.maxPlayersInTeam = maxPlayersInTeam;
++        this.maxTeams = maxTeams;
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/eu/matherion/api/database/DatabaseConnection.java b/src/main/java/eu/matherion/api/database/DatabaseConnection.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..afbc7f7295cf3777fbb773aecee20a09d7db0c11
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/database/DatabaseConnection.java
+@@ -0,0 +1,57 @@
++package eu.matherion.api.database;
++
++import java.sql.Connection;
++import java.sql.SQLException;
++
++public interface DatabaseConnection<D extends javax.sql.DataSource> {
++
++    /**
++     * Gets the instance of DataSource
++     *
++     * @return The data source
++     */
++    public D getDataSource();
++
++    /**
++     * Gets the Database Type
++     *
++     * @return The database Type
++     */
++    public String getType();
++
++    /**
++     * Gets the Connection
++     *
++     * @param autoReconnect Auto reconnect if the connection is closed?
++     * @return The connection
++     */
++    public Connection getConnection(boolean autoReconnect) throws SQLException;
++
++    /**
++     * Gets the Connection with the auto-reconnect option set to true.
++     *
++     * @return The connection
++     */
++    public Connection getConnection() throws SQLException;
++
++    /**
++     * Closes the connection if it's not closed
++     * already.
++     */
++    public void closeConnection();
++
++    /**
++     * Checks whether the connection is closed.
++     *
++     * @return Is the connection closed?
++     */
++    public boolean isConnectionClosed();
++
++    /**
++     * Connects to the database. If the connection is already made,
++     * nothing happens.
++     *
++     * @return
++     */
++    public Connection connect() throws SQLException;
++}
+diff --git a/src/main/java/eu/matherion/api/database/DatabaseManager.java b/src/main/java/eu/matherion/api/database/DatabaseManager.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..0678313bf042bc5ee2d5c70e440fe3319fc1082d
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/database/DatabaseManager.java
+@@ -0,0 +1,14 @@
++package eu.matherion.api.database;
++
++import com.j256.ormlite.dao.Dao;
++
++import javax.sql.DataSource;
++import java.sql.SQLException;
++
++public interface DatabaseManager {
++    public <T, I> Dao<T, I> getDao(Class<? extends T> dao);
++
++    public void loadDao(Class dao) throws SQLException;
++
++    DatabaseConnection<? extends DataSource> getConnection();
++}
+diff --git a/src/main/java/eu/matherion/api/item/FinalItemJob.java b/src/main/java/eu/matherion/api/item/FinalItemJob.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1788c81f2446e78a7d30b657a95648e9eb93123b
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/item/FinalItemJob.java
+@@ -0,0 +1,27 @@
++package eu.matherion.api.item;
++
++import eu.matherion.api.menu.WindowItem;
++
++public class FinalItemJob {
++
++    private final int slot;
++    private final WindowItem guiExtenderItem;
++
++    public FinalItemJob(int slot, WindowItem guiExtenderItem) {
++        this.slot = slot;
++        this.guiExtenderItem = guiExtenderItem;
++    }
++
++    public FinalItemJob(WindowItem guiExtenderItem) {
++        this.slot = -1;
++        this.guiExtenderItem = guiExtenderItem;
++    }
++
++    public int getSlot() {
++        return slot;
++    }
++
++    public WindowItem getGuiExtenderItem() {
++        return guiExtenderItem;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/item/ItemBuilder.java b/src/main/java/eu/matherion/api/item/ItemBuilder.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e22d7e2278f35b2da9971b1ee5ea06a28eb617ad
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/item/ItemBuilder.java
+@@ -0,0 +1,168 @@
++package eu.matherion.api.item;
++
++import com.mojang.authlib.GameProfile;
++import com.mojang.authlib.properties.Property;
++import eu.matherion.api.menu.utils.ColorUtil;
++import org.bukkit.Material;
++import org.bukkit.enchantments.Enchantment;
++import org.bukkit.inventory.ItemFlag;
++import org.bukkit.inventory.ItemStack;
++import org.bukkit.inventory.meta.ItemMeta;
++import org.bukkit.inventory.meta.SkullMeta;
++
++import java.lang.reflect.Field;
++import java.util.Arrays;
++import java.util.List;
++import java.util.Map;
++import java.util.UUID;
++
++public class ItemBuilder {
++
++    private ItemStack item;
++    private ItemMeta meta;
++
++    public ItemBuilder(Material material, int amount) {
++        setItem(material, amount);
++    }
++
++    public ItemBuilder(Material material) {
++        setItem(material, 1);
++    }
++
++    public ItemBuilder() {
++        setItem(Material.DIRT, 1);
++    }
++
++    public ItemBuilder(ItemStack itemStack) {
++        setItem(itemStack);
++    }
++
++    public ItemBuilder(Material material, int amount, int data) {
++        setItem(material, amount, (short) data);
++    }
++
++    public ItemBuilder(Material material, int amount, short data) {
++        setItem(material, amount, data);
++    }
++
++    public ItemBuilder setItem(Material material, int amount, short data) {
++        item = new ItemStack(material, amount, data);
++        meta = item.getItemMeta();
++        return this;
++    }
++
++    public ItemBuilder setItem(Material material, int amount) {
++        item = new ItemStack(material, amount);
++        meta = item.getItemMeta();
++        return this;
++    }
++
++    public ItemBuilder setName(String name) {
++        meta.setDisplayName(ColorUtil.fixColor(name));
++        update();
++        return this;
++    }
++
++    public ItemBuilder setLore(List<String> lore) {
++        meta.setLore(ColorUtil.fixColor(lore));
++        update();
++        return this;
++    }
++
++    public ItemBuilder setLore(String... lore) {
++        meta.setLore(Arrays.asList(ColorUtil.fixColor(lore)));
++        update();
++        return this;
++    }
++
++    public ItemBuilder addEnchantment(Enchantment enchantments) {
++        meta.addEnchant(enchantments, 1, true);
++        update();
++        return this;
++    }
++
++    public ItemBuilder setAmount(int amount) {
++        item.setAmount(amount);
++        update();
++        return this;
++    }
++
++    public ItemBuilder setEnchantments(List<ItemEnchantment> enchantments) {
++        for (ItemEnchantment enchantment : enchantments)
++            meta.addEnchant(enchantment.getEnchantment(), enchantment.getLevel(), enchantment.isUnsafe());
++        update();
++        return this;
++    }
++
++    public ItemBuilder setEnchantments(Map<Enchantment, Integer> enchantments) {
++        for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet())
++            meta.addEnchant(entry.getKey(), entry.getValue(), true);
++        update();
++        return this;
++    }
++
++    public ItemBuilder addItemFlag(ItemFlag i) {
++        this.meta.addItemFlags(i);
++        this.update();
++        return this;
++    }
++
++    public ItemBuilder removeItemFlag(ItemFlag i) {
++        meta.removeItemFlags(i);
++        update();
++        return this;
++    }
++
++    public ItemBuilder setSkullOwner(String owner) {
++        try {
++            SkullMeta im = (SkullMeta) meta;
++            im.setOwner(owner);
++            update();
++        } catch (ClassCastException e) {
++            e.printStackTrace();
++        }
++        return this;
++    }
++
++    public ItemBuilder setSkullBase64(String base64) {
++        SkullMeta im = (SkullMeta) meta;
++        GameProfile profile = new GameProfile(UUID.randomUUID(), "");
++        profile.getProperties().put("textures", new Property("textures", base64));
++        Field profileField = null;
++        try {
++            profileField = im.getClass().getDeclaredField("profile");
++            profileField.setAccessible(true);
++            profileField.set(im, profile);
++        } catch (Exception e) {
++            e.printStackTrace();
++        }
++        update();
++        return this;
++    }
++
++    public ItemBuilder update() {
++        item.setItemMeta(meta);
++        return this;
++    }
++
++    public ItemBuilder hideEnchants() {
++        getMeta().addItemFlags(ItemFlag.HIDE_ENCHANTS);
++        update();
++        return this;
++    }
++
++    public ItemStack getItem() {
++        return item;
++    }
++
++    public ItemBuilder setItem(ItemStack itemStack) {
++        item = itemStack;
++        meta = item.getItemMeta();
++        return this;
++    }
++
++    public ItemMeta getMeta() {
++        return meta;
++    }
++
++}
+\ No newline at end of file
+diff --git a/src/main/java/eu/matherion/api/item/ItemEnchantment.java b/src/main/java/eu/matherion/api/item/ItemEnchantment.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..01e28ab03308b79ae6579b42080e60e7a4a9f71a
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/item/ItemEnchantment.java
+@@ -0,0 +1,46 @@
++package eu.matherion.api.item;
++
++import org.bukkit.enchantments.Enchantment;
++
++public class ItemEnchantment {
++
++    private Enchantment enchantment;
++    private int level;
++    private boolean unsafe;
++
++    public ItemEnchantment(Enchantment enchantment, int level, boolean unsafe) {
++        this.enchantment = enchantment;
++        this.level = level;
++        this.unsafe = unsafe;
++    }
++
++    public ItemEnchantment(Enchantment enchantment, int level) {
++        this.enchantment = enchantment;
++        this.level = level;
++        this.unsafe = true;
++    }
++
++    public Enchantment getEnchantment() {
++        return enchantment;
++    }
++
++    public void setEnchantment(Enchantment enchantment) {
++        this.enchantment = enchantment;
++    }
++
++    public int getLevel() {
++        return level;
++    }
++
++    public void setLevel(int level) {
++        this.level = level;
++    }
++
++    public boolean isUnsafe() {
++        return unsafe;
++    }
++
++    public void setUnsafe(boolean unsafe) {
++        this.unsafe = unsafe;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/item/ItemPack.java b/src/main/java/eu/matherion/api/item/ItemPack.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..6c08790e13749e6ffd8b8d31d390e2013dacd631
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/item/ItemPack.java
+@@ -0,0 +1,54 @@
++package eu.matherion.api.item;
++
++import eu.matherion.api.item.response.ItemResponse;
++
++public class ItemPack {
++
++    private int slot;
++    private ItemBuilder itemBuilder;
++    private ItemResponse elementResponse;
++
++    public ItemPack(int slot, ItemBuilder itemBuilder) {
++        this.itemBuilder = itemBuilder;
++        this.slot = slot;
++    }
++
++    public ItemPack(int slot, ItemBuilder itemBuilder, ItemResponse elementResponse) {
++        this.itemBuilder = itemBuilder;
++        this.slot = slot;
++        this.elementResponse = elementResponse;
++    }
++
++    public ItemPack(ItemBuilder itemBuilder) {
++        this.itemBuilder = itemBuilder;
++    }
++
++    public ItemPack(ItemBuilder itemBuilder, ItemResponse elementResponse) {
++        this.itemBuilder = itemBuilder;
++        this.elementResponse = elementResponse;
++    }
++
++    public int getSlot() {
++        return slot;
++    }
++
++    public void setSlot(int slot) {
++        this.slot = slot;
++    }
++
++    public ItemBuilder getItemBuilder() {
++        return itemBuilder;
++    }
++
++    public void setItemBuilder(ItemBuilder itemBuilder) {
++        this.itemBuilder = itemBuilder;
++    }
++
++    public ItemResponse getElementResponse() {
++        return elementResponse;
++    }
++
++    public void setElementResponse(ItemResponse elementResponse) {
++        this.elementResponse = elementResponse;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/item/response/ItemResponse.java b/src/main/java/eu/matherion/api/item/response/ItemResponse.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8442d441fe68f30f1be14f239e1fa891de62dec6
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/item/response/ItemResponse.java
+@@ -0,0 +1,15 @@
++package eu.matherion.api.item.response;
++
++import org.bukkit.event.inventory.InventoryClickEvent;
++
++public interface ItemResponse {
++
++    void onForbiddenEnter(InventoryClickEvent event);
++
++    void onForbiddenClick(InventoryClickEvent event);
++
++    void onEnter(InventoryClickEvent event);
++
++    void onClick(InventoryClickEvent event);
++
++}
+diff --git a/src/main/java/eu/matherion/api/item/response/impl/ConsumerItemResponse.java b/src/main/java/eu/matherion/api/item/response/impl/ConsumerItemResponse.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..d47b5d9ddb9f5691441afe037e9b6bb60bb42320
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/item/response/impl/ConsumerItemResponse.java
+@@ -0,0 +1,53 @@
++package eu.matherion.api.item.response.impl;
++
++import eu.matherion.api.item.response.ItemResponse;
++import org.bukkit.event.inventory.InventoryClickEvent;
++import org.bukkit.util.Consumer;
++import org.jetbrains.annotations.Nullable;
++
++public class ConsumerItemResponse implements ItemResponse {
++
++    @Nullable
++    private final Consumer<InventoryClickEvent> enter;
++
++    @Nullable
++    private final Consumer<InventoryClickEvent> click;
++
++    @Nullable
++    private final Consumer<InventoryClickEvent> forbiddenEnter;
++
++    @Nullable
++    private final Consumer<InventoryClickEvent> forbiddenClick;
++
++    public ConsumerItemResponse(
++        @Nullable Consumer<InventoryClickEvent> enter,
++        @Nullable Consumer<InventoryClickEvent> click,
++        @Nullable Consumer<InventoryClickEvent> forbiddenEnter,
++        @Nullable Consumer<InventoryClickEvent> forbiddenClick
++    ) {
++        this.enter = enter;
++        this.click = click;
++        this.forbiddenEnter = forbiddenEnter;
++        this.forbiddenClick = forbiddenClick;
++    }
++
++    @Override
++    public void onEnter(InventoryClickEvent event) {
++        if (enter != null) enter.accept(event);
++    }
++
++    @Override
++    public void onClick(InventoryClickEvent event) {
++        if (click != null) click.accept(event);
++    }
++
++    @Override
++    public void onForbiddenEnter(InventoryClickEvent event) {
++        if (forbiddenEnter != null) forbiddenEnter.accept(event);
++    }
++
++    @Override
++    public void onForbiddenClick(InventoryClickEvent event) {
++        if (forbiddenClick != null) forbiddenClick.accept(event);
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/item/serializable/ItemSection.java b/src/main/java/eu/matherion/api/item/serializable/ItemSection.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d69345b31c8cd4a81bbc88f76455b3b7123feea
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/item/serializable/ItemSection.java
+@@ -0,0 +1,47 @@
++package eu.matherion.api.item.serializable;
++
++import org.bukkit.configuration.serialization.ConfigurationSerializable;
++import org.bukkit.configuration.serialization.ConfigurationSerialization;
++
++import java.util.LinkedHashMap;
++import java.util.Map;
++
++public class ItemSection implements ConfigurationSerializable {
++
++    private int slot;
++    private SerializableItemBuilder itemBuilder;
++
++    public ItemSection() {
++
++    }
++
++    public ItemSection(int slot, SerializableItemBuilder builder) {
++        this.slot = slot;
++        this.itemBuilder = builder;
++    }
++
++    public ItemSection(Map<String, Object> data) {
++        this.slot = (int) data.get("slot");
++        this.itemBuilder = (SerializableItemBuilder) data.get("item");
++    }
++
++    public void register() {
++        ConfigurationSerialization.registerClass(this.getClass());
++    }
++
++    @Override
++    public Map<String, Object> serialize() {
++        Map<String, Object> data = new LinkedHashMap<>();
++        data.put("slot", slot);
++        data.put("item", itemBuilder.serialize());
++        return data;
++    }
++
++    public int getSlot() {
++        return slot;
++    }
++
++    public SerializableItemBuilder getItemBuilder() {
++        return itemBuilder;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/item/serializable/SerializableItemBuilder.java b/src/main/java/eu/matherion/api/item/serializable/SerializableItemBuilder.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..37732d118bb194ed2206dda0a5ba75eafb53b5bf
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/item/serializable/SerializableItemBuilder.java
+@@ -0,0 +1,78 @@
++package eu.matherion.api.item.serializable;
++
++import eu.matherion.api.item.ItemBuilder;
++import eu.matherion.api.menu.utils.ColorUtil;
++import org.bukkit.Material;
++import org.bukkit.configuration.serialization.ConfigurationSerializable;
++import org.bukkit.enchantments.Enchantment;
++import org.bukkit.inventory.ItemStack;
++import org.bukkit.inventory.meta.ItemMeta;
++
++import java.util.HashMap;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.stream.Collectors;
++
++@SuppressWarnings("unchecked")
++public class SerializableItemBuilder extends ItemBuilder implements ConfigurationSerializable {
++
++    public SerializableItemBuilder(ItemBuilder itemBuilder) {
++        super(itemBuilder.getItem());
++    }
++
++    public SerializableItemBuilder(Map<String, Object> data) {
++        Material material = Material.matchMaterial(data.get("material").toString());
++        int amount = (int) data.get("amount");
++        short durability = (short) data.get("durability");
++        String name = ColorUtil.fixColor(data.get("name").toString());
++        List<String> lore = ColorUtil.fixColor((List<String>) data.get("lore"));
++
++        List<String> enchantsList = (List<String>) data.get("enchants");
++        Map<Enchantment, Integer> enchants = new HashMap<>();
++
++        for(String enchant : enchantsList) {
++            String[] part = enchant.split(":");
++            if (part.length < 1)
++                continue;
++
++            Enchantment ench = Enchantment.getByName(part[0]);
++            if (ench == null)
++                continue;
++
++            int level;
++            try {
++                level = Integer.parseInt(part[1]);
++            }
++            catch (NumberFormatException ex) {
++                continue;
++            }
++            enchants.put(ench, level);
++        }
++
++        setItem(material, amount, durability);
++        setEnchantments(enchants);
++        setLore(lore);
++        setName(name);
++    }
++
++    @Override
++    public Map<String, Object> serialize() {
++        ItemStack item = getItem();
++        ItemMeta meta = getMeta();
++
++        Map<String, Object> data = new LinkedHashMap<>();
++        data.put("material", item.getType().toString());
++        data.put("amount", item.getAmount());
++        data.put("durability", item.getDurability());
++        data.put("name", meta.displayName() == null ? null
++                : ColorUtil.fixColor(meta.getDisplayName()));
++        data.put("lore", meta.getLore());
++        data.put("enchants", meta.getEnchants()
++                .keySet()
++                .stream()
++                .map(enchant -> enchant.getName() + ":" + meta.getEnchantLevel(enchant))
++                .collect(Collectors.toList()));
++        return data;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/menu/AbstractMenu.java b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..29842a24d4f372bcda87b5b25def7b0e13713a93
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+@@ -0,0 +1,376 @@
++package eu.matherion.api.menu;
++
++import eu.matherion.api.item.FinalItemJob;
++import eu.matherion.api.item.ItemBuilder;
++import eu.matherion.api.item.ItemPack;
++import eu.matherion.api.item.response.ItemResponse;
++import eu.matherion.api.menu.response.WindowResponse;
++import org.bukkit.Bukkit;
++import org.bukkit.Material;
++import org.bukkit.entity.Player;
++import org.bukkit.event.EventHandler;
++import org.bukkit.event.Listener;
++import org.bukkit.event.inventory.InventoryClickEvent;
++import org.bukkit.event.inventory.InventoryCloseEvent;
++import org.bukkit.event.inventory.InventoryDragEvent;
++import org.bukkit.event.inventory.InventoryOpenEvent;
++import org.bukkit.inventory.Inventory;
++import org.bukkit.inventory.ItemStack;
++
++import java.util.*;
++
++public abstract class AbstractMenu implements Listener, WindowResponse {
++
++    private final int id;
++
++    private final List<FinalItemJob> jobs = new ArrayList<>();
++    private final Map<Integer, WindowElement> elements = new HashMap<>();
++    private GUISettings guiSettings;
++    private Window gui;
++    private WindowResponse windowResponse;
++
++    public AbstractMenu(Window gui) {
++        this.gui = gui;
++        this.id = 0000; // fixme: fix
++
++        this.guiSettings = new GUISettings();
++        this.guiSettings.setCanEnterItems(false);
++        this.guiSettings.setCanDrag(false);
++
++        Bukkit.getPluginManager().registerEvents(this, null);
++    }
++
++    public void setGUI(Window gui) {
++        this.gui = gui;
++        this.elements.clear();
++        this.jobs.clear();
++    }
++
++    public void addEmptyElementResponse(int slot, boolean pullable) {
++        WindowElement guiElement = new WindowElement(slot, pullable);
++        elements.put(slot, guiElement);
++    }
++
++    public void addElementResponse(int slot, ItemResponse itemResponse) {
++        WindowElement guiElement = new WindowElement(slot);
++        guiElement.addElementResponse(slot, itemResponse);
++        elements.put(slot, guiElement);
++    }
++
++    public void addElementResponse(int slot, boolean pullable, ItemResponse itemResponse) {
++        WindowElement guiElement = new WindowElement(slot);
++        guiElement.addElementResponse(slot, pullable, itemResponse);
++        elements.put(slot, guiElement);
++    }
++
++    public void addElementResponse(int slot, WindowItem guiExtenderItem) {
++        WindowElement guiElement = new WindowElement(slot);
++        guiElement.addElementResponse(slot, guiExtenderItem.isPullable(), guiExtenderItem);
++        elements.put(slot, guiElement);
++    }
++
++    private void addEmptyElementResponse(int slot) {
++        WindowElement guiElement = new WindowElement(slot);
++        elements.put(slot, guiElement);
++    }
++
++    public void addWindowResponse(WindowResponse windowResponse) {
++        this.windowResponse = windowResponse;
++    }
++
++
++    @EventHandler
++    public void onInventoryDrag(InventoryDragEvent event) {
++        if (event.getView().getTopInventory().equals(getBukkitInventory())
++                && !guiSettings.isCanDrag()) {
++            event.setCancelled(true);
++            return;
++        }
++        if (guiSettings.isCanDrag() &&
++                canEnter(event.getCursor())) {
++            event.setCancelled(false);
++        }
++    }
++
++    @EventHandler
++    public void onInventoryClick(InventoryClickEvent event) {
++        if (event.getView() == null
++                || event.getView().getTopInventory() == null
++                || event.getView().getBottomInventory() == null
++                || event.getClickedInventory() == null)
++            return;
++
++        if (guiSettings.isCanEnterItems()) {
++            if (!event.isShiftClick()) {
++                // TODO: refactorThis
++                if (event.getView().getTopInventory().equals(getBukkitInventory())
++                        && event.getClickedInventory().equals(getBukkitInventory())
++                        && event.getCursor() != null
++                        && canEnter(event.getCursor())) {
++                    if (guiSettings.getItemResponse() != null)
++                        guiSettings.getItemResponse().onEnter(event);
++                    event.setCancelled(false);
++                    return;
++                } else if (event.getView().getTopInventory().equals(getBukkitInventory())
++                        && event.getClickedInventory().equals(getBukkitInventory())
++                        && event.getCursor() != null
++                        && !canEnter(event.getCursor())) {
++                    if (guiSettings.getItemResponse() != null)
++                        guiSettings.getItemResponse().onForbiddenEnter(event);
++                    event.setCancelled(true);
++                    return;
++                }
++            } else {
++                if (event.getView().getTopInventory().equals(getBukkitInventory())
++                        && !event.getClickedInventory().equals(getBukkitInventory())
++                        && event.getCurrentItem() != null
++                        && canEnter(event.getCurrentItem())) {
++                    if (guiSettings.getItemResponse() != null)
++                        guiSettings.getItemResponse().onClick(event);
++                    event.setCancelled(false);
++                    return;
++                } else if (event.getView().getTopInventory().equals(getBukkitInventory())
++                        && !event.getClickedInventory().equals(getBukkitInventory())
++                        && event.getCurrentItem() != null
++                        && !canEnter(event.getCurrentItem())) {
++                    if (guiSettings.getItemResponse() != null)
++                        guiSettings.getItemResponse().onForbiddenClick(event);
++                    event.setCancelled(true);
++                    return;
++                }
++            }
++        }
++
++        if (event.getView().getTopInventory().equals(getBukkitInventory())
++                && !guiSettings.isCanEnterItems()) {
++            if (event.isShiftClick() &&
++                    !event.getClickedInventory().equals(getBukkitInventory())) {
++                event.setCancelled(true);
++                return;
++            } else if (!event.isShiftClick() &&
++                    event.getClickedInventory().equals(getBukkitInventory())
++                    && (event.getCurrentItem() == null || event.getCurrentItem().getType().equals(Material.AIR))) {
++                event.setCancelled(true);
++                return;
++            } else if (!event.isShiftClick() &&
++                    event.getClickedInventory().equals(getBukkitInventory())) {
++                checkElements(event);
++                return;
++            } else if (event.isShiftClick() &&
++                    event.getClickedInventory().equals(getBukkitInventory())) {
++                checkElements(event);
++                return;
++            }
++            event.setCancelled(false);
++            return;
++        }
++        checkElements(event);
++    }
++
++    private boolean canEnter(ItemStack itemStack) {
++        if (guiSettings.isCanEnterItems()) {
++            List<ItemStack> materials = guiSettings.getEnterableItems();
++
++            if (materials.isEmpty())
++                return true;
++
++            if (itemStack == null || itemStack.getType().equals(Material.AIR))
++                return true;
++
++            for (ItemStack entry : materials) {
++                Material material = entry.getType();
++                short data = entry.getDurability();
++
++                if (itemStack.getType().equals(material)
++                        && itemStack.getDurability() == data)
++                    return true;
++            }
++        }
++        return false;
++    }
++
++    @EventHandler
++    public void onInventoryOpen(InventoryOpenEvent e) {
++        if (e.getView().getTopInventory().equals(getBukkitInventory())) {
++            if (windowResponse != null)
++                windowResponse.onOpen(e);
++        }
++    }
++
++    @EventHandler
++    public void onInventoryClose(InventoryCloseEvent e) {
++        if (e.getView().getTopInventory().equals(getBukkitInventory())) {
++            if (windowResponse != null)
++                windowResponse.onClose(e);
++
++            Bukkit.getScheduler().runTaskLater(null, () ->
++                    ((Player) e.getPlayer()).updateInventory(), 5);
++            // I need to update the inventory because minecraft is weird
++            // otherwise you can make the item to.. "stay" in your inventory until you do something with it
++        }
++    }
++
++    public void setItem(ItemPack... itemPacks) {
++        for (ItemPack itemPack : itemPacks) {
++            ItemBuilder itemBuilder = itemPack.getItemBuilder();
++            int slot = itemPack.getSlot();
++
++            if (itemPack.getElementResponse() != null)
++                addElementResponse(slot, itemPack.getElementResponse());
++            else addEmptyElementResponse(slot);
++
++            gui.setItem(slot, itemBuilder);
++            updateInventory();
++        }
++    }
++
++    public void changeItem(int slot, ItemBuilder itemBuilder) {
++        gui.setItem(slot, itemBuilder);
++        updateInventory();
++    }
++
++    public void setItem(int slot, ItemBuilder itemBuilder) {
++        gui.setItem(slot, itemBuilder);
++        addEmptyElementResponse(slot);
++        updateInventory();
++    }
++
++    public void setItem(int slot, ItemBuilder itemBuilder, ItemResponse itemResponse) {
++        gui.setItem(slot, itemBuilder);
++        addElementResponse(slot, itemResponse);
++        updateInventory();
++    }
++
++    public void setItem(int slot, WindowItem guiExtenderItem) {
++        jobs.add(new FinalItemJob(slot, guiExtenderItem));
++    }
++
++    public int addItem(ItemBuilder itemBuilder) {
++        int index = gui.addItem(itemBuilder);
++        addEmptyElementResponse(index);
++        updateInventory();
++        return index;
++    }
++
++    public int addItem(ItemBuilder itemBuilder, ItemResponse itemResponse) {
++        int index = gui.addItem(itemBuilder);
++        addElementResponse(index, itemResponse);
++        updateInventory();
++        return index;
++    }
++
++    public void addItem(WindowItem guiExtenderItem) {
++        jobs.add(new FinalItemJob(guiExtenderItem));
++    }
++
++    public void removeItem(int slot) {
++        gui.removeItem(slot);
++    }
++
++    public void openInventory(Player player) {
++        if (!jobs.isEmpty()) {
++            for (FinalItemJob finalItemJob : jobs) {
++                if (finalItemJob.getSlot() == -1) {
++                    addExtenderItem(finalItemJob.getGuiExtenderItem(),
++                            player);
++                } else setExtenderItem(finalItemJob.getSlot(),
++                        finalItemJob.getGuiExtenderItem(),
++                        player);
++            }
++            jobs.clear();
++        }
++
++        player.openInventory(getBukkitInventory());
++    }
++
++    public Inventory getBukkitInventory() {
++        return gui.getInventory();
++    }
++
++    public void updateInventory() {
++        List<Integer> slots = new ArrayList<>();
++        int temp = 0;
++        for (ItemStack itemStack : getBukkitInventory().getContents()) {
++            temp++;
++            if (itemStack == null || itemStack.getType().equals(Material.AIR))
++                continue;
++
++            int current = temp - 1;
++            slots.add(current);
++        }
++
++        for (int slot : elements.keySet())
++            if (slots.contains(slot))
++                slots.remove((Integer) slot);
++
++        for (int slot : slots)
++            addEmptyElementResponse(slot);
++
++        getBukkitInventory().getViewers().forEach(viewer -> ((Player) viewer).updateInventory());
++    }
++
++    private void setExtenderItem(int slot, WindowItem guiExtenderItem, Player player) {
++        gui.setItem(slot, guiExtenderItem.getItemBuilder(player));
++        addElementResponse(slot, guiExtenderItem);
++        updateInventory();
++    }
++
++    private void addExtenderItem(WindowItem windowItem, Player player) {
++        int index = gui.addItem(windowItem.getItemBuilder(player));
++        addElementResponse(index, windowItem);
++        updateInventory();
++    }
++
++    private void checkElements(InventoryClickEvent event) {
++        for (WindowElement element : elements.values()) {
++            int slot = element.getSlot();
++
++            if (slot != event.getSlot() ||
++                    !Objects.equals(event.getClickedInventory(), getBukkitInventory())
++                    || !event.getView().getTopInventory().equals(getBukkitInventory())
++            )
++                continue;
++
++            event.setCancelled(!element.isPullable());
++
++            if (element.getItemResponse() != null)
++                element.getItemResponse().onClick(event);
++
++            else if (element.getWindowItem() != null)
++                element.getWindowItem().onClick(event);
++        }
++
++    }
++
++    public int getId() {
++        return id;
++    }
++
++    public List<FinalItemJob> getJobs() {
++        return jobs;
++    }
++
++    public Map<Integer, WindowElement> getElements() {
++        return elements;
++    }
++
++    public GUISettings getGuiSettings() {
++        return guiSettings;
++    }
++
++    public Window getGui() {
++        return gui;
++    }
++
++    public WindowResponse getWindowResponse() {
++        return windowResponse;
++    }
++
++    @Override
++    public void onOpen(InventoryOpenEvent event) {
++    }
++
++    @Override
++    public void onClose(InventoryCloseEvent event) {
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/menu/GUISettings.java b/src/main/java/eu/matherion/api/menu/GUISettings.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..b4a35a6144de1fcbb9dde03331e312182e886c67
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/GUISettings.java
+@@ -0,0 +1,56 @@
++package eu.matherion.api.menu;
++
++import eu.matherion.api.item.response.ItemResponse;
++import org.bukkit.Material;
++import org.bukkit.inventory.ItemStack;
++
++import java.util.ArrayList;
++import java.util.List;
++
++public class GUISettings {
++
++    private boolean canEnterItems;
++    private boolean canDrag;
++    private final List<ItemStack> enterableItems = new ArrayList<>();
++    private ItemResponse itemResponse;
++
++    public void addEnterableItem(Material material) {
++        this.enterableItems.add(new ItemStack(material));
++    }
++
++    public void addEnterableItem(Material material, short data) {
++        this.enterableItems.add(new ItemStack(material, 1, data, null));
++    }
++
++    public void addEnterableItem(Material material, int data) {
++        this.enterableItems.add(new ItemStack(material, 1, (short) data, null));
++    }
++
++    public boolean isCanEnterItems() {
++        return canEnterItems;
++    }
++
++    public void setCanEnterItems(boolean canEnterItems) {
++        this.canEnterItems = canEnterItems;
++    }
++
++    public boolean isCanDrag() {
++        return canDrag;
++    }
++
++    public void setCanDrag(boolean canDrag) {
++        this.canDrag = canDrag;
++    }
++
++    public List<ItemStack> getEnterableItems() {
++        return enterableItems;
++    }
++
++    public ItemResponse getItemResponse() {
++        return itemResponse;
++    }
++
++    public void setItemResponse(ItemResponse itemResponse) {
++        this.itemResponse = itemResponse;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/menu/Window.java b/src/main/java/eu/matherion/api/menu/Window.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..5d153000520cf112e1e21b35a934215300fb81cb
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/Window.java
+@@ -0,0 +1,151 @@
++package eu.matherion.api.menu;
++
++import eu.matherion.api.item.ItemBuilder;
++import eu.matherion.api.item.serializable.ItemSection;
++import eu.matherion.api.item.serializable.SerializableItemBuilder;
++import eu.matherion.api.menu.utils.ColorUtil;
++import eu.matherion.api.menu.utils.Rows;
++import net.kyori.adventure.text.Component;
++import org.bukkit.Bukkit;
++import org.bukkit.Material;
++import org.bukkit.configuration.serialization.ConfigurationSerializable;
++import org.bukkit.entity.Player;
++import org.bukkit.inventory.Inventory;
++import org.bukkit.inventory.InventoryHolder;
++import org.bukkit.inventory.ItemStack;
++import org.jetbrains.annotations.NotNull;
++import org.jetbrains.annotations.Nullable;
++
++import java.util.*;
++import java.util.stream.IntStream;
++
++public class Window implements ConfigurationSerializable {
++
++    private final UUID uniqueId = UUID.randomUUID();
++
++    private Inventory inventory;
++
++    private int slots = Rows.SIX.getSlots();
++
++    private String title = "";
++
++    private InventoryHolder holder;
++
++    public Window(InventoryHolder holder, String title) {
++        setupWindow(holder, title, slots);
++    }
++
++    public Window(InventoryHolder holder, String title, Rows rows) {
++        setupWindow(holder, title, rows.getSlots());
++    }
++
++    public Window(String title, Rows rows) {
++        setupWindow(null, title, rows.getSlots());
++    }
++
++    public Window(String title) {
++        setupWindow(null, title, slots);
++    }
++
++    private void setupWindow(
++            @Nullable InventoryHolder holder,
++            String title,
++            int slots
++    ) {
++        this.slots = slots;
++        this.holder = holder;
++        this.title = title;
++
++        this.inventory = createInventory(holder, slots, title);
++    }
++
++    public void open(Player player) {
++        player.openInventory(this.inventory);
++    }
++
++    public int addItem(ItemBuilder itemBuilder) {
++        try {
++            this.inventory.addItem(itemBuilder.getItem());
++        } catch (Exception ignored) {}
++
++        return getPosition(itemBuilder.getItem().getType(), itemBuilder.getItem().getDurability());
++    }
++
++    private int getPosition(Material material, int data) {
++        ItemStack[] contents = inventory.getContents();
++
++        return IntStream
++                .range(0, contents.length)
++                .filter(i -> contents[i] != null && contents[i].getType().equals(material) && contents[i].getDurability() == data)
++                .findFirst()
++                .orElse(-1);
++    }
++
++    public void setItem(int slot, ItemBuilder itemBuilder) {
++        try {
++            this.inventory.setItem(slot, itemBuilder.getItem());
++        } catch (Exception ignored) {}
++    }
++
++    public void removeItem(int slot) {
++        this.inventory.setItem(slot, new ItemStack(Material.AIR));
++    }
++
++    public static Inventory createInventory(InventoryHolder holder, Rows rows, String title) {
++       return createInventory(holder, rows.getSlots(), title);
++    }
++
++    public static Inventory createInventory(InventoryHolder holder, int size, String title) {
++        return Bukkit.createInventory(holder, size, Component.text(ColorUtil.fixColor(title)));
++    }
++
++    public void setInventory(Inventory inventory) {
++        this.inventory = inventory;
++    }
++
++    @Override
++    public String toString() {
++        return uniqueId.toString();
++    }
++
++    public UUID getUniqueId() {
++        return uniqueId;
++    }
++
++    public Inventory getInventory() {
++        return inventory;
++    }
++
++    public int getSlots() {
++        return slots;
++    }
++
++    public String getTitle() {
++        return title;
++    }
++
++    public InventoryHolder getHolder() {
++        return holder;
++    }
++
++    public @NotNull Map<String, Object> serialize() {
++        Map<String, Object> data = new LinkedHashMap<>();
++        data.put("title", getTitle());
++
++        List<ItemSection> itemSections = new ArrayList<>();
++        int slot = 0;
++        for (ItemStack itemStack : getInventory().getContents()) {
++            if (itemStack == null || itemStack.getType().equals(Material.AIR))
++                continue;
++            itemSections.add(new ItemSection(slot, new SerializableItemBuilder(new ItemBuilder(itemStack))));
++            slot++;
++        }
++        List<Map<String, Object>> itemSectionsSerialized = new ArrayList<>();
++        for (ItemSection section : itemSections) {
++            itemSectionsSerialized.add(section.serialize());
++        }
++
++        data.put("inventory", itemSectionsSerialized);
++        return data;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/menu/WindowElement.java b/src/main/java/eu/matherion/api/menu/WindowElement.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..78e03e33b549f3f4c5b5ae926c7b5c7fa97b3fbb
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/WindowElement.java
+@@ -0,0 +1,56 @@
++package eu.matherion.api.menu;
++
++import eu.matherion.api.item.response.ItemResponse;
++
++public class WindowElement {
++
++    private final int slot;
++    private ItemResponse elementResponse;
++    private WindowItem windowItem;
++    private boolean pullable;
++
++    public WindowElement(int slot) {
++        this.slot = slot;
++    }
++
++    public WindowElement(int slot, boolean pullable) {
++        this.slot = slot;
++        this.pullable = pullable;
++    }
++
++    public void addElementResponse(int slot, ItemResponse elementResponse) {
++        this.elementResponse = elementResponse;
++        this.pullable = false;
++    }
++
++    public void addElementResponse(int slot, boolean pullable, ItemResponse elementResponse) {
++        this.elementResponse = elementResponse;
++        this.pullable = pullable;
++    }
++
++    public void addElementResponse(int slot, WindowItem guiExtenderItem) {
++        this.pullable = guiExtenderItem.isPullable();
++        this.windowItem = guiExtenderItem;
++    }
++
++    public int getSlot() {
++        return slot;
++    }
++
++    public ItemResponse getItemResponse() {
++        return elementResponse;
++    }
++
++    public WindowItem getWindowItem() {
++        return windowItem;
++    }
++
++    public boolean isPullable() {
++        return pullable;
++    }
++
++    @Override
++    public String toString() {
++        return "[" + slot + "] " + elementResponse.hashCode();
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/menu/WindowItem.java b/src/main/java/eu/matherion/api/menu/WindowItem.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..891fb63f054490816e3d90eae49db72255f7ef08
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/WindowItem.java
+@@ -0,0 +1,34 @@
++package eu.matherion.api.menu;
++
++import eu.matherion.api.item.ItemBuilder;
++import eu.matherion.api.item.response.ItemResponse;
++import org.bukkit.Material;
++import org.bukkit.entity.Player;
++
++public abstract class WindowItem implements ItemResponse {
++
++    private final ItemBuilder itemBuilder;
++    private boolean pullable;
++
++    public WindowItem(ItemBuilder itemBuilder) {
++        this.itemBuilder = itemBuilder;
++    }
++
++    public WindowItem() {
++        this.itemBuilder = new ItemBuilder(Material.AIR);
++    }
++
++    // You can override this based on a player for example.
++    public ItemBuilder getItemBuilder(Player player) {
++        return itemBuilder;
++    }
++
++    public boolean isPullable() {
++        return pullable;
++    }
++
++    public void setPullable(boolean pullable) {
++        this.pullable = pullable;
++    }
++
++}
+\ No newline at end of file
+diff --git a/src/main/java/eu/matherion/api/menu/impl/BasicMenu.java b/src/main/java/eu/matherion/api/menu/impl/BasicMenu.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ed3398c737da9398f8232065b514c16b90be84f0
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/impl/BasicMenu.java
+@@ -0,0 +1,10 @@
++package eu.matherion.api.menu.impl;
++
++import eu.matherion.api.menu.AbstractMenu;
++import eu.matherion.api.menu.Window;
++
++public class BasicMenu extends AbstractMenu {
++    public BasicMenu(Window window) {
++        super(window);
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/menu/response/WindowResponse.java b/src/main/java/eu/matherion/api/menu/response/WindowResponse.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..eabf5aa6fcab3bb79d6947121cadc8caa92f4186
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/response/WindowResponse.java
+@@ -0,0 +1,12 @@
++package eu.matherion.api.menu.response;
++
++import org.bukkit.event.inventory.InventoryCloseEvent;
++import org.bukkit.event.inventory.InventoryOpenEvent;
++
++public interface WindowResponse {
++
++    void onOpen(InventoryOpenEvent event);
++
++    void onClose(InventoryCloseEvent event);
++
++}
+\ No newline at end of file
+diff --git a/src/main/java/eu/matherion/api/menu/response/impl/ConsumerWindowResponse.java b/src/main/java/eu/matherion/api/menu/response/impl/ConsumerWindowResponse.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..7cd318f3e0be8b2d17a4c79aaf4ccbd48af0bcb4
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/response/impl/ConsumerWindowResponse.java
+@@ -0,0 +1,35 @@
++package eu.matherion.api.menu.response.impl;
++
++import eu.matherion.api.menu.response.WindowResponse;
++import org.bukkit.event.inventory.InventoryCloseEvent;
++import org.bukkit.event.inventory.InventoryOpenEvent;
++import org.jetbrains.annotations.Nullable;
++
++import java.util.function.Consumer;
++
++public class ConsumerWindowResponse implements WindowResponse {
++
++    @Nullable
++    private final Consumer<InventoryOpenEvent> open;
++
++    @Nullable
++    private final Consumer<InventoryCloseEvent> close;
++
++    public ConsumerWindowResponse(
++        @Nullable Consumer<InventoryOpenEvent> open,
++        @Nullable Consumer<InventoryCloseEvent> close
++    ) {
++        this.open = open;
++        this.close = close;
++    }
++
++    @Override
++    public void onOpen(InventoryOpenEvent event) {
++        if (open != null) open.accept(event);
++    }
++
++    @Override
++    public void onClose(InventoryCloseEvent event) {
++        if (close != null) close.accept(event);
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/menu/utils/ColorUtil.java b/src/main/java/eu/matherion/api/menu/utils/ColorUtil.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..2ca149650588c4b27dc66d44560eea8e6ba8bc06
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/utils/ColorUtil.java
+@@ -0,0 +1,29 @@
++package eu.matherion.api.menu.utils;
++
++import org.bukkit.ChatColor;
++
++import java.util.List;
++import java.util.stream.Collectors;
++
++public class ColorUtil {
++
++    private ColorUtil() {}
++
++    public static String fixColor(String str) {
++        return ChatColor.translateAlternateColorCodes('&', str);
++    }
++
++    public static List<String> fixColor(List<String> stringList) {
++        return stringList.stream().map(ColorUtil::fixColor)
++                .collect(Collectors.toList());
++    }
++
++    public static String[] fixColor(String[] strings) {
++        String[] stringArray = new String[strings.length];
++        for (int i = 0; i < strings.length; i++) {
++            stringArray[i] = fixColor(strings[i]);
++        }
++        return stringArray;
++    }
++
++}
+diff --git a/src/main/java/eu/matherion/api/menu/utils/Rows.java b/src/main/java/eu/matherion/api/menu/utils/Rows.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..56f13f70728763ebfae640278f69eb5979a9a2a3
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/menu/utils/Rows.java
+@@ -0,0 +1,25 @@
++package eu.matherion.api.menu.utils;
++
++public enum Rows {
++
++    ONE(9),
++    TWO(18),
++    THREE(27),
++    FOUR(36),
++    FIVE(45),
++    SIX(54);
++
++    private int slots;
++
++    Rows(int slots) {
++        this.slots = slots;
++    }
++
++    public int getSlots() {
++        return slots;
++    }
++
++    public void setSlots(int slots) {
++        this.slots = slots;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/redis/RedisManager.java b/src/main/java/eu/matherion/api/redis/RedisManager.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e09b4ba91ab4c2762adee4d13a61164b4bfa59ec
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/redis/RedisManager.java
+@@ -0,0 +1,21 @@
++package eu.matherion.api.redis;
++
++import eu.matherion.api.ServerState;
++
++import java.util.Map;
++import java.util.concurrent.ExecutionException;
++import java.util.concurrent.Future;
++
++public interface RedisManager<T> {
++
++     T getClient();
++
++     Map<String, ServerState> getServers();
++
++     Future<Map<String, ServerState>> getServersAsync();
++
++     void setServerState(String server, ServerState serverState);
++
++     Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException;
++
++}
+diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
+index 1df78ae3385802380f97b81e1a45df771f52d9f1..6565adaaa7edab85804ea43984dc6c849d90b4e3 100644
+--- a/src/main/java/org/bukkit/Server.java
++++ b/src/main/java/org/bukkit/Server.java
+@@ -13,6 +13,10 @@ import java.util.Set;
+ import java.util.UUID;
+ import java.util.function.Consumer;
+ import java.util.logging.Logger;
++
++import eu.matherion.api.ServerState;
++import eu.matherion.api.database.DatabaseManager;
++import eu.matherion.api.redis.RedisManager;
+ import org.bukkit.Warning.WarningState;
+ import org.bukkit.advancement.Advancement;
+ import org.bukkit.block.data.BlockData;
+@@ -25,6 +29,7 @@ import org.bukkit.command.CommandException;
+ import org.bukkit.command.CommandSender;
+ import org.bukkit.command.ConsoleCommandSender;
+ import org.bukkit.command.PluginCommand;
++import org.bukkit.configuration.file.YamlConfiguration;
+ import org.bukkit.entity.Entity;
+ import org.bukkit.entity.Player;
+ import org.bukkit.event.inventory.InventoryType;
+@@ -471,6 +476,31 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+     public UUID getPlayerUniqueId(@NotNull String playerName);
+     // Paper end
+ 
++    // Matherion start
++    /**
++     * Gets the database manager for interacting with the database.
++     *
++     * @return a database manager for this Server instance
++     */
++    @Nullable
++    public DatabaseManager getDatabaseManager();
++
++    /**
++     * Gets the redis manager for interacting with Redis.
++     *
++     * @return a redis manager for this Server instance
++     */
++    @Nullable
++    public RedisManager getRedisManager();
++
++    /**
++     * Gets the redis manager for interacting with Redis.
++     *
++     * @return a redis manager for this Server instance
++     */
++    public ServerState getServerState();
++    // Matherion end
++
+     /**
+      * Gets the plugin manager for interfacing with plugins.
+      *
+@@ -1579,7 +1609,7 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+     UnsafeValues getUnsafe();
+ 
+     // Spigot start
+-    public class Spigot {
++    public abstract class Spigot {
+ 
+         @NotNull
+         public org.bukkit.configuration.file.YamlConfiguration getConfig() {
+@@ -1636,6 +1666,9 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+             throw new UnsupportedOperationException("Not supported yet.");
+         }
+ 
++        // Matherion start
++        public abstract YamlConfiguration getMatherionityConfig();
++
+         /**
+          * Restart the server. If the server administrator has not configured restarting, the server will stop.
+          */
+diff --git a/src/main/java/org/bukkit/command/defaults/ReloadCommand.java b/src/main/java/org/bukkit/command/defaults/ReloadCommand.java
+index 0c7ba0718de2b93d013968ca0fec34ffd423990f..aaf75a28408d922c01a815973fad77c65d7747e7 100644
+--- a/src/main/java/org/bukkit/command/defaults/ReloadCommand.java
++++ b/src/main/java/org/bukkit/command/defaults/ReloadCommand.java
+@@ -22,6 +22,8 @@ public class ReloadCommand extends BukkitCommand {
+     public boolean execute(@NotNull CommandSender sender, @NotNull String currentAlias, @NotNull String[] args) { // Paper
+         if (!testPermission(sender)) return true;
+ 
++        // Matherion start - this is some bullshit
++        /*
+         // Paper start - Reload permissions.yml & require confirm
+         boolean confirmed = System.getProperty("LetMeReload") != null;
+         if (args.length == 1) {
+@@ -53,7 +55,10 @@ public class ReloadCommand extends BukkitCommand {
+         Command.broadcastCommandMessage(sender, ChatColor.RED + "If you encounter any issues please use the /stop command to restart your server.");
+         Bukkit.reload();
+         Command.broadcastCommandMessage(sender, ChatColor.GREEN + "Reload complete.");
++         */
+ 
++        Command.broadcastCommandMessage(sender, ChatColor.RED + "Nasrat a rozmazat, Martine nebud liny prase a restartuj to.");
++        // Matherion end
+         return true;
+     }
+ 
+diff --git a/src/main/java/org/bukkit/inventory/ItemStack.java b/src/main/java/org/bukkit/inventory/ItemStack.java
+index 58f99e3ebac9a01ebffe4d208e16cbee474d4aa3..2e8fd9e4054810068e36badbbe2ffd0f0a2e9639 100644
+--- a/src/main/java/org/bukkit/inventory/ItemStack.java
++++ b/src/main/java/org/bukkit/inventory/ItemStack.java
+@@ -78,9 +78,9 @@ public class ItemStack implements Cloneable, ConfigurationSerializable, net.kyor
+      * @param amount the amount in the stack
+      * @param damage the damage value of the item
+      * @param data the data value or null
+-     * @deprecated this method uses an ambiguous data byte object
++     * --@deprecated this method uses an ambiguous data byte object
+      */
+-    @Deprecated
++    //@Deprecated - Matherion - remove deprecation
+     public ItemStack(@NotNull final Material type, final int amount, final short damage, @Nullable final Byte data) {
+         Validate.notNull(type, "Material cannot be null");
+         this.type = type;
+@@ -204,13 +204,13 @@ public class ItemStack implements Cloneable, ConfigurationSerializable, net.kyor
+      * Sets the durability of this item
+      *
+      * @param durability Durability of this item
+-     * @deprecated durability is now part of ItemMeta. To avoid confusion and
++     * --@deprecated durability is now part of ItemMeta. To avoid confusion and
+      * misuse, {@link #getItemMeta()}, {@link #setItemMeta(ItemMeta)} and
+      * {@link Damageable#setDamage(int)} should be used instead. This is because
+      * any call to this method will be overwritten by subsequent setting of
+      * ItemMeta which was created before this call.
+      */
+-    @Deprecated
++    //@Deprecated - Matherion - Removed deprecation
+     public void setDurability(final short durability) {
+         ItemMeta meta = getItemMeta();
+         if (meta != null) {
+@@ -223,9 +223,10 @@ public class ItemStack implements Cloneable, ConfigurationSerializable, net.kyor
+      * Gets the durability of this item
+      *
+      * @return Durability of this item
+-     * @deprecated see {@link #setDurability(short)}
++     *
++     * --@deprecated see {@link #setDurability(short)}
+      */
+-    @Deprecated
++    // @Deprecated - Removed deprecation
+     public short getDurability() {
+         ItemMeta meta = getItemMeta();
+         return (meta == null) ? 0 : (short) ((Damageable) meta).getDamage();
+diff --git a/src/main/java/org/bukkit/plugin/Plugin.java b/src/main/java/org/bukkit/plugin/Plugin.java
+index 79890c68f1ad31f951dfdbd9a16dac500ec58c40..c210726868ec3e86d05d6fe27498b31a9ae2c1b2 100644
+--- a/src/main/java/org/bukkit/plugin/Plugin.java
++++ b/src/main/java/org/bukkit/plugin/Plugin.java
+@@ -1,8 +1,7 @@
+ package org.bukkit.plugin;
+ 
+-import java.io.File;
+-import java.io.InputStream;
+-import java.util.logging.Logger;
++import com.google.inject.AbstractModule;
++import com.j256.ormlite.dao.Dao;
+ import org.bukkit.Server;
+ import org.bukkit.command.TabExecutor;
+ import org.bukkit.configuration.file.FileConfiguration;
+@@ -10,6 +9,11 @@ import org.bukkit.generator.ChunkGenerator;
+ import org.jetbrains.annotations.NotNull;
+ import org.jetbrains.annotations.Nullable;
+ 
++import java.io.File;
++import java.io.InputStream;
++import java.util.List;
++import java.util.logging.Logger;
++
+ /**
+  * Represents a Plugin
+  * <p>
+@@ -75,11 +79,11 @@ public interface Plugin extends TabExecutor {
+      * hierarchy as the .jar file (subdirectories are preserved).
+      *
+      * @param resourcePath the embedded resource path to look for within the
+-     *     plugin's .jar file. (No preceding slash).
+-     * @param replace if true, the embedded resource will overwrite the
+-     *     contents of an existing file.
++     *                     plugin's .jar file. (No preceding slash).
++     * @param replace      if true, the embedded resource will overwrite the
++     *                     contents of an existing file.
+      * @throws IllegalArgumentException if the resource path is null, empty,
+-     *     or points to a nonexistent resource.
++     *                                  or points to a nonexistent resource.
+      */
+     public void saveResource(@NotNull String resourcePath, boolean replace);
+ 
+@@ -117,6 +121,12 @@ public interface Plugin extends TabExecutor {
+      */
+     public void onDisable();
+ 
++    // Matherion start
++    public List<? extends AbstractModule> provideDIModules();
++
++    public List<Class> provideDatabaseEntities();
++    // Matherion end
++
+     /**
+      * Called after a plugin is loaded but before it has been enabled.
+      * <p>
+@@ -149,8 +159,8 @@ public interface Plugin extends TabExecutor {
+      * in the server configuration
+      *
+      * @param worldName Name of the world that this will be applied to
+-     * @param id Unique ID, if any, that was specified to indicate which
+-     *     generator was requested
++     * @param id        Unique ID, if any, that was specified to indicate which
++     *                  generator was requested
+      * @return ChunkGenerator for use in the default world generation
+      */
+     @Nullable
+diff --git a/src/main/java/org/bukkit/plugin/java/JavaPlugin.java b/src/main/java/org/bukkit/plugin/java/JavaPlugin.java
+index 04fa3991f6ce4e9dad804f28fc6c947695857089..5a3b6ae8707fac378c265f631c8ef710b44687da 100644
+--- a/src/main/java/org/bukkit/plugin/java/JavaPlugin.java
++++ b/src/main/java/org/bukkit/plugin/java/JavaPlugin.java
+@@ -10,9 +10,12 @@ import java.io.OutputStream;
+ import java.io.Reader;
+ import java.net.URL;
+ import java.net.URLConnection;
++import java.util.ArrayList;
+ import java.util.List;
+ import java.util.logging.Level;
+ import java.util.logging.Logger;
++
++import com.google.inject.AbstractModule;
+ import org.apache.commons.lang.Validate;
+ import org.bukkit.Server;
+ import org.bukkit.command.Command;
+@@ -324,6 +327,18 @@ public abstract class JavaPlugin extends PluginBase {
+         }
+     }
+ 
++    // Matherion start
++    @Override
++    public List<? extends AbstractModule> provideDIModules() {
++        return new ArrayList<>();
++    }
++
++    @Override
++    public List<Class> provideDatabaseEntities() {
++        return new ArrayList<>();
++    }
++    // Matherion end
++
+     @Override
+     public void onLoad() {}
+ 

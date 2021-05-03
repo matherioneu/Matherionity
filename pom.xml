@@ -1,11 +1,11 @@
 <project>
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.tuinity</groupId>
-    <artifactId>tuinity-parent</artifactId>
+    <groupId>eu.matherion</groupId>
+    <artifactId>matherionity-parent</artifactId>
     <version>dev-SNAPSHOT</version>
     <packaging>pom</packaging>
-    <name>Tuinity (Parent)</name>
+    <name>Matherionity (Parent)</name>
 
     <repositories>
         <repository>
@@ -27,4 +27,24 @@
         <module>Tuinity-Server</module>
         <module>Paper${file.separator}Paper-MojangAPI</module> <!-- We don't plan on patching this, so this hack is good enough. -->
     </modules>
+
+    <!-- Matherion start -->
+    <dependencies>
+        <dependency>
+            <groupId>com.j256.ormlite</groupId>
+            <artifactId>ormlite-core</artifactId>
+            <version>5.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.j256.ormlite</groupId>
+            <artifactId>ormlite-jdbc</artifactId>
+            <version>5.3</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.inject</groupId>
+            <artifactId>guice</artifactId>
+            <version>5.0.1</version>
+        </dependency>
+    </dependencies>
+    <!-- Matherion end -->
 </project>

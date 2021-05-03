@@ -1,0 +1,1399 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 3 May 2021 14:09:04 +0200
+Subject: [PATCH] feat: init matherion changes, db, redis, menus
+
+
+diff --git a/pom.xml b/pom.xml
+index de7da911833569c97b7f800a43ee7354d19677e2..5baebe8d8788ba1f502fb60f7421e70441933023 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -1,14 +1,14 @@
+ <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+     <modelVersion>4.0.0</modelVersion>
+-    <artifactId>tuinity</artifactId>
++    <artifactId>matherionity-server</artifactId>
+     <packaging>jar</packaging>
+     <version>1.16.5-R0.1-SNAPSHOT</version>
+-    <name>Tuinity-Server</name>
+-    <url>https://github.com/Spottedleaf/Tuinity</url>
++    <name>Matherionity-Server</name>
++    <url>https://gitlab.com/matherioneu/matherionity</url>
+ 
+     <properties>
+-        <!-- <skipTests>true</skipTests> Paper - This [was] not going to end well -->
++        <skipTests>true</skipTests>
+         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+         <api.version>unknown</api.version>
+         <bt.name>git</bt.name>
+@@ -19,8 +19,8 @@
+     </properties>
+ 
+     <parent>
+-        <groupId>com.tuinity</groupId>
+-        <artifactId>tuinity-parent</artifactId>
++        <groupId>eu.matherion</groupId>
++        <artifactId>matherionity-parent</artifactId>
+         <version>dev-SNAPSHOT</version>
+         <relativePath>../pom.xml</relativePath>
+     </parent>
+@@ -38,12 +38,41 @@
+     </dependencyManagement>
+ 
+     <dependencies>
++        <!-- Matherion start -->
+         <dependency>
++            <groupId>com.zaxxer</groupId>
++            <artifactId>HikariCP</artifactId>
++            <version>4.0.3</version>
++        </dependency>
++
++        <!-- because hikari -->
++        <dependency>
++            <groupId>org.slf4j</groupId>
++            <artifactId>slf4j-simple</artifactId>
++            <version>1.7.5</version>
++            <scope>runtime</scope>
++        </dependency>
++
++        <!-- <dependency>
+             <groupId>com.tuinity</groupId>
+             <artifactId>tuinity-api</artifactId>
+             <version>${project.version}</version>
+             <scope>compile</scope>
++        </dependency> -->
++
++        <dependency>
++            <groupId>eu.matherion</groupId>
++            <artifactId>matherionity-api</artifactId>
++            <version>1.16.5-R0.1-SNAPSHOT</version>
+         </dependency>
++
++        <dependency>
++            <groupId>org.redisson</groupId>
++            <artifactId>redisson</artifactId>
++            <version>3.15.4</version>
++        </dependency>
++
++        <!-- Matherion end -->
+         <dependency>
+             <groupId>com.destroystokyo.paper</groupId>
+             <artifactId>paper-mojangapi</artifactId>
+@@ -93,7 +122,7 @@
+         <dependency>
+             <groupId>org.apache.logging.log4j</groupId>
+             <artifactId>log4j-slf4j-impl</artifactId>
+-            <scope>runtime</scope>
++            <scope>compile</scope>
+         </dependency>
+         <dependency>
+             <groupId>org.apache.logging.log4j</groupId>
+@@ -170,7 +199,7 @@
+ 
+     <!-- This builds a completely 'ready to start' jar with all dependencies inside -->
+     <build>
+-        <finalName>tuinity-${minecraft.version}</finalName>
++        <finalName>matherionity-${minecraft.version}</finalName>
+         <defaultGoal>install</defaultGoal> <!-- Paper -->
+         <plugins>
+             <plugin>
+@@ -178,7 +207,7 @@
+                 <artifactId>gitdescribe-maven-plugin</artifactId>
+                 <version>1.3</version>
+                 <configuration>
+-                    <outputPrefix>git-Tuinity-</outputPrefix> <!-- Tuinity -->
++                    <outputPrefix>git-Matherionity-</outputPrefix> <!-- Tuinity -->
+                     <scmDirectory>..</scmDirectory>
+                 </configuration>
+                 <executions>
+diff --git a/src/main/java/eu/matherion/server/config/MatherionityConfig.java b/src/main/java/eu/matherion/server/config/MatherionityConfig.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..90789026adc5b4183ed60101e850f19d4eefdfb0
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/config/MatherionityConfig.java
+@@ -0,0 +1,185 @@
++package eu.matherion.server.config;
++
++import com.destroystokyo.paper.util.SneakyThrow;
++import eu.matherion.api.TeamMode;
++import org.bukkit.Bukkit;
++import org.bukkit.configuration.file.YamlConfiguration;
++import org.jetbrains.annotations.Nullable;
++
++import java.io.File;
++import java.lang.reflect.Method;
++import java.lang.reflect.Modifier;
++import java.util.Random;
++import java.util.logging.Level;
++
++public final class MatherionityConfig {
++
++    public static final String CONFIG_HEADER = "Configuration file for Matherion.";
++    public static final int CURRENT_CONFIG_VERSION = 1;
++
++    private static final Object[] EMPTY = new Object[0];
++
++    private static File configFile;
++    public static YamlConfiguration config;
++    private static int configVersion;
++    public static boolean createWorldSections = true;
++    public static void init(final File file) {
++        // TODO remove this in the future...
++        final File configFile = new File(file.getParent(), "matherionity.yml");
++        MatherionityConfig.configFile = file;
++        final YamlConfiguration config = new YamlConfiguration();
++        config.options().header(CONFIG_HEADER);
++        config.options().copyDefaults(true);
++
++        if (!file.exists()) {
++            try {
++                if (!file.createNewFile())
++                    throw new Exception("File#createNewFile returns false."); // Matherion - yo what dangling bool?
++            } catch (final Exception ex) {
++                Bukkit.getLogger().log(Level.SEVERE, "Failure to create tuinity config", ex);
++            }
++        }
++
++        try {
++            config.load(file);
++        } catch (final Exception ex) {
++            Bukkit.getLogger().log(Level.SEVERE, "Failure to load matherionity config", ex);
++        }
++
++        MatherionityConfig.load(config);
++    }
++
++    public static void load(final YamlConfiguration config) {
++        MatherionityConfig.config = config;
++        MatherionityConfig.configVersion = MatherionityConfig.getInt("config-version-please-do-not-modify-me", CURRENT_CONFIG_VERSION);
++        MatherionityConfig.set("config-version-please-do-not-modify-me", CURRENT_CONFIG_VERSION);
++
++        for (final Method method : MatherionityConfig.class.getDeclaredMethods()) {
++            if (method.getReturnType() != void.class || method.getParameterCount() != 0 ||
++                    !Modifier.isPrivate(method.getModifiers()) || !Modifier.isStatic(method.getModifiers())) {
++                continue;
++            }
++
++            try {
++                method.setAccessible(true);
++                method.invoke(null, EMPTY);
++                method.setAccessible(false);
++            } catch (final Exception ex) {
++                SneakyThrow.sneaky(ex); /* Rethrow, this is critical */
++                throw new RuntimeException(ex); // unreachable
++            }
++        }
++
++        /* We re-save to add new options */
++        try {
++            config.save(MatherionityConfig.configFile);
++        } catch (final Exception ex) {
++            Bukkit.getLogger().log(Level.SEVERE, "Unable to save matherionity config", ex);
++        }
++    }
++
++    static void set(final String path, final Object value) {
++        MatherionityConfig.config.set(path, value);
++    }
++
++    static boolean getBoolean(final String path, final boolean dfl) {
++        MatherionityConfig.config.addDefault(path, Boolean.valueOf(dfl));
++        return MatherionityConfig.config.getBoolean(path, dfl);
++    }
++
++    static int getInt(final String path, final int dfl) {
++        MatherionityConfig.config.addDefault(path, Integer.valueOf(dfl));
++        return MatherionityConfig.config.getInt(path, dfl);
++    }
++
++    static long getLong(final String path, final long dfl) {
++        MatherionityConfig.config.addDefault(path, Long.valueOf(dfl));
++        return MatherionityConfig.config.getLong(path, dfl);
++    }
++
++    static double getDouble(final String path, final double dfl) {
++        MatherionityConfig.config.addDefault(path, Double.valueOf(dfl));
++        return MatherionityConfig.config.getDouble(path, dfl);
++    }
++
++    static String getString(final String path, final String dfl) {
++        MatherionityConfig.config.addDefault(path, dfl);
++        return MatherionityConfig.config.getString(path, dfl);
++    }
++
++    public static String serverName;
++
++    private static void serverName() {
++        serverName = MatherionityConfig.getString("serverName", "CHANGEMEPLSTHX");
++    }
++
++    public static int serverId;
++
++    private static void serverId() {
++        serverId = MatherionityConfig.getInt("serverId", new Random().nextInt());
++    }
++
++    public static boolean privateServer;
++
++    private static void privateServer() {
++        privateServer = MatherionityConfig.getBoolean("privateServer", false);
++    }
++
++    @Nullable
++    public static TeamMode teamMode;
++
++    private static void teamMode() {
++        String name = MatherionityConfig.getString("teamMode", null);
++        teamMode = name != null ? TeamMode.valueOf(name) : null;
++    }
++
++    /**
++     * Database JDBC URL
++     */
++
++    public static String jdbcUrl;
++
++    private static void databaseJdbcUrl() {
++        jdbcUrl = MatherionityConfig.getString("database.jdbcUrl", "jdbc:mysql://localhost:3306/matherionity");
++    }
++
++    /**
++     * Database Username
++     */
++
++    public static String databaseUsername;
++
++    private static void databaseUsername() {
++        databaseUsername = MatherionityConfig.getString("database.username", "root");
++    }
++
++    /**
++     * Database Password
++     */
++
++    public static String databasePassword;
++
++    private static void databasePassword() {
++        databasePassword = MatherionityConfig.getString("database.password", "stylecraft");
++    }
++
++    /**
++     * Redis URL
++     */
++
++    public static String redisUrl;
++
++    private static void redisUrl() {
++        redisUrl = MatherionityConfig.getString("redis.url", "redis://127.0.0.1:6379");
++    }
++
++    /********************************/
++    // Redis Password
++    /********************************/
++
++    public static String redisPassword;
++
++    private static void redisPassword() {
++        redisPassword = MatherionityConfig.getString("redis.password", "stylecraft");
++    }
++}
+\ No newline at end of file
+diff --git a/src/main/java/eu/matherion/server/database/DatabaseConnection.java b/src/main/java/eu/matherion/server/database/DatabaseConnection.java
+deleted file mode 100644
+index e7b873541a4a216130a8b1d9a7d76dd671579c8f..0000000000000000000000000000000000000000
+--- a/src/main/java/eu/matherion/server/database/DatabaseConnection.java
++++ /dev/null
+@@ -1,2 +0,0 @@
+-package eu.matherion.server.database;public class DatabaseConnection {
+-}
+diff --git a/src/main/java/eu/matherion/server/database/DatabaseManager.java b/src/main/java/eu/matherion/server/database/DatabaseManager.java
+deleted file mode 100644
+index 5ba8ec1c1a7a50ed7d31f5ddeac002e461edd1a7..0000000000000000000000000000000000000000
+--- a/src/main/java/eu/matherion/server/database/DatabaseManager.java
++++ /dev/null
+@@ -1,2 +0,0 @@
+-package eu.matherion.server.database;public class DatabaseManager {
+-}
+diff --git a/src/main/java/eu/matherion/server/database/DatabaseManagerImpl.java b/src/main/java/eu/matherion/server/database/DatabaseManagerImpl.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..5b8cac162ab3bf8a0e9b4ffaff8a00423892cf1e
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/database/DatabaseManagerImpl.java
+@@ -0,0 +1,65 @@
++package eu.matherion.server.database;
++
++import com.j256.ormlite.dao.Dao;
++import com.j256.ormlite.dao.DaoManager;
++import com.j256.ormlite.jdbc.DataSourceConnectionSource;
++import com.j256.ormlite.table.TableUtils;
++import eu.matherion.api.database.DatabaseConnection;
++import eu.matherion.api.database.DatabaseManager;
++import org.jetbrains.annotations.Nullable;
++
++import javax.sql.DataSource;
++import java.sql.SQLException;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.logging.Level;
++import java.util.logging.Logger;
++
++public class DatabaseManagerImpl implements DatabaseManager {
++    private DatabaseConnection<? extends DataSource> connection;
++
++    private DataSourceConnectionSource connectionSource;
++
++    private Map<Class, Dao> daoInstances = new HashMap<>();
++
++    public DatabaseManagerImpl(DatabaseConnection<? extends DataSource> connection) throws SQLException {
++        this.connection = connection;
++        this.connectionSource = new DataSourceConnectionSource(this.connection.getDataSource(), connection.getConnection().getMetaData().getURL());
++    }
++
++    @Nullable
++    public <T, I> Dao<T, I> getDao(Class<? extends T> dao) {
++        Dao daoInstance = daoInstances.get(dao);
++        if (daoInstance != null) return daoInstance;
++
++        Logger
++                .getLogger(getClass().getSimpleName())
++                .log(Level.WARNING, "Dao not registered at startup; this is a no-op, but please register it upon loading your plugin.");
++
++        try {
++            loadDao(dao);
++        } catch (SQLException e) {
++            return null;
++        }
++
++        return (Dao<T, I>) daoInstances.get(dao);
++    }
++
++    public void loadDao(Class dao) throws SQLException {
++        if (daoInstances.get(dao) != null) return;
++
++        Dao daoInstance = DaoManager.createDao(this.connectionSource, dao);
++        TableUtils.createTableIfNotExists(this.connectionSource, dao);
++
++        daoInstances.put(dao, daoInstance);
++    }
++
++    @Override
++    public DatabaseConnection<? extends DataSource> getConnection() {
++        return connection;
++    }
++
++    public DataSourceConnectionSource getConnectionSource() {
++        return connectionSource;
++    }
++}
+diff --git a/src/main/java/eu/matherion/server/database/impl/HikariConnection.java b/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
+index 7b6bf59068a722772dcd9bd587e2caf981d8006a..12f3c033de54b93f56cc676279842130d75895f3 100644
+--- a/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
++++ b/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
+@@ -1,2 +1,63 @@
+-package eu.matherion.server.database.impl;public class HikariConnection {
++package eu.matherion.server.database.impl;
++
++import com.zaxxer.hikari.HikariConfig;
++import com.zaxxer.hikari.HikariDataSource;
++import eu.matherion.api.database.DatabaseConnection;
++import org.jetbrains.annotations.Nullable;
++
++import java.sql.Connection;
++import java.sql.SQLException;
++
++public class HikariConnection implements DatabaseConnection<HikariDataSource> {
++
++    private HikariDataSource dataSource = null;
++
++    private HikariConfig config;
++
++    public HikariConnection(HikariConfig config) {
++        this.config = config;
++    }
++
++    @Override
++    public HikariDataSource getDataSource() {
++        return dataSource;
++    }
++
++    @Override
++    public String getType() {
++        return "mysql";
++    }
++
++    @Override
++    @Nullable
++    public Connection getConnection(boolean autoReconnect) throws SQLException {
++        if (dataSource == null) {
++            if (autoReconnect) connect();
++            else return null;
++        }
++        return dataSource.getConnection();
++    }
++
++    @Override
++    @Nullable
++    public Connection getConnection() throws SQLException {
++        return getConnection(true);
++    }
++
++    @Override
++    public void closeConnection() {
++        if (dataSource == null) return;
++        dataSource.close();
++    }
++
++    @Override
++    public boolean isConnectionClosed() {
++        return dataSource == null || dataSource.isClosed();
++    }
++
++    @Override
++    public Connection connect() throws SQLException {
++        if (dataSource == null) dataSource = new HikariDataSource(config);
++        return dataSource.getConnection();
++    }
+ }
+diff --git a/src/main/java/eu/matherion/server/menu/MenuBuilder.java b/src/main/java/eu/matherion/server/menu/MenuBuilder.java
+deleted file mode 100644
+index abc0cfe95a2d270fa959e177f4db1b790f1b1b45..0000000000000000000000000000000000000000
+--- a/src/main/java/eu/matherion/server/menu/MenuBuilder.java
++++ /dev/null
+@@ -1,5 +0,0 @@
+-package eu.matherion.server.menu;
+-
+-public class MenuBuilder {
+-
+-}
+diff --git a/src/main/java/eu/matherion/server/redis/RedisManagerImpl.java b/src/main/java/eu/matherion/server/redis/RedisManagerImpl.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e0799fbaa3c8b49c2d5b075a577daa09b92e0817
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/redis/RedisManagerImpl.java
+@@ -0,0 +1,79 @@
++package eu.matherion.server.redis;
++
++import eu.matherion.api.redis.RedisManager;
++import eu.matherion.api.ServerState;
++import org.redisson.Redisson;
++import org.redisson.api.RedissonClient;
++import org.redisson.config.Config;
++
++import java.io.File;
++import java.io.IOException;
++import java.io.InputStream;
++import java.net.URL;
++import java.util.Map;
++import java.util.concurrent.ExecutionException;
++import java.util.concurrent.Future;
++
++public class RedisManagerImpl implements RedisManager<RedissonClient> {
++
++    protected Config config;
++
++    private final RedissonClient client;
++
++    public RedisManagerImpl(Config config) {
++        this.config = config;
++        this.client = Redisson.create(config);
++    }
++
++    /**
++     * @deprecated Use {@link RedisManagerImpl#RedisManagerImpl(Config)}
++     */
++    @Deprecated
++    public RedisManagerImpl(File configFile) throws IOException {
++        this(Config.fromYAML(configFile));
++    }
++
++    /**
++     * @deprecated Use {@link RedisManagerImpl#RedisManagerImpl(Config)}
++     */
++    @Deprecated
++    public RedisManagerImpl(URL configUrl) throws IOException {
++        this(Config.fromYAML(configUrl));
++    }
++
++    /**
++     * @deprecated Use {@link RedisManagerImpl#RedisManagerImpl(Config)}
++     */
++    @Deprecated
++    public RedisManagerImpl(InputStream configStream) throws IOException {
++        this(Config.fromYAML(configStream));
++    }
++
++    @Override
++    public RedissonClient getClient() {
++        return this.client;
++    }
++
++    @Override
++    public Map<String, ServerState> getServers() {
++        return client.getMap("servers");
++    }
++
++    @Override
++    public Future<Map<String, ServerState>> getServersAsync() {
++        return client.getBuckets().getAsync("servers");
++    }
++
++    @Override
++    public void setServerState(String server, ServerState serverState) {
++        client.getMap("servers").put(server, serverState);
++    }
++
++    @Override
++    public Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException {
++        Map<String, ServerState> states = getServersAsync().get();
++        states.put(server, serverState);
++        return client.getBuckets().setAsync(states);
++    }
++
++}
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 02d8a8f13d81c47316f704fb700afd0214a5f546..358f4f98a6d61d146777a93a67bc04ad54aa911a 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -975,6 +975,11 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+ 
+     // Paper start - allow passing of the intent to restart
+     public void safeShutdown(boolean flag) {
++        // Matherion start
++        server.unloadDatabase();
++        server.unloadRedis();
++        server.serverState = null;
++        // Matherion end
+         this.safeShutdown(flag, false);
+     }
+     public void safeShutdown(boolean flag, boolean isRestarting) {
+diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+index d902efdb8f2d42ea4c3933f7fa76ebe135ee09db..bc5d048bb99c4899f9d58718b17fbc18659aae52 100644
+--- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -2,11 +2,14 @@ package net.minecraft.server.dedicated;
+ 
+ import com.google.common.base.Strings;
+ import com.google.common.collect.Lists;
++import com.google.inject.Guice;
++import com.google.inject.Injector;
+ import com.mojang.authlib.GameProfile;
+ import com.mojang.authlib.GameProfileRepository;
+ import com.mojang.authlib.minecraft.MinecraftSessionService;
+ import com.mojang.datafixers.DataFixer;
+ import java.io.BufferedReader;
++import java.io.File;
+ import java.io.IOException;
+ import java.io.InputStreamReader;
+ import java.net.InetAddress;
+@@ -19,6 +22,8 @@ import java.util.Optional;
+ import java.util.function.BooleanSupplier;
+ import java.util.regex.Pattern;
+ import javax.annotation.Nullable;
++
++import eu.matherion.server.config.MatherionityConfig;
+ import net.minecraft.CrashReport;
+ import net.minecraft.DefaultUncaughtExceptionHandler;
+ import net.minecraft.SharedConstants;
+@@ -66,6 +71,7 @@ import org.apache.logging.log4j.Level;
+ import org.apache.logging.log4j.io.IoBuilder;
+ import org.bukkit.command.CommandSender;
+ import co.aikar.timings.MinecraftTimings; // Paper
++import org.bukkit.craftbukkit.CraftServer;
+ import org.bukkit.event.server.ServerCommandEvent;
+ import org.bukkit.craftbukkit.util.Waitable;
+ import org.bukkit.event.server.RemoteServerCommandEvent;
+@@ -215,6 +221,7 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+         com.destroystokyo.paper.VersionHistoryManager.INSTANCE.getClass(); // load version history now
+         // Paper end
+         com.tuinity.tuinity.config.TuinityConfig.init((java.io.File) options.valueOf("tuinity-settings")); // Tuinity - Server Config
++        MatherionityConfig.init((File) options.valueOf("matherionity-settings")); // Matherion - Server Config
+ 
+         this.setPVP(dedicatedserverproperties.pvp);
+         this.setAllowFlight(dedicatedserverproperties.allowFlight);
+@@ -247,12 +254,20 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+             return false;
+         }
+ 
++        // Matherion start
++        server.loadDatabase();
++        server.loadRedis();
++        server.createGuice();
++        // Matherion end
++
+         // CraftBukkit start
+         // this.a((PlayerList) (new DedicatedPlayerList(this, this.customRegistry, this.worldNBTStorage))); // Spigot - moved up
++
+         server.loadPlugins();
+         server.enablePlugins(org.bukkit.plugin.PluginLoadOrder.STARTUP);
+-        // CraftBukkit end
+ 
++        // CraftBukkit end
++        /* Matherion start - das some bullshit
+         if (!this.getOnlineMode()) {
+             DedicatedServer.LOGGER.warn("**** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!");
+             DedicatedServer.LOGGER.warn("The server will make no attempt to authenticate usernames. Beware.");
+@@ -265,7 +280,7 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+             }
+             // Spigot end
+             DedicatedServer.LOGGER.warn("To change this, set \"online-mode\" to \"true\" in the server.properties file.");
+-        }
++        } Matherion end */
+ 
+         if (!NameReferencingFileConverter.e(this)) {
+             return false;
+@@ -498,10 +513,10 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+     }
+ 
+     public void bd() {
++        /* Matherion start - yeah no
+         if (this.q == null) {
+             this.q = ServerGUI.a(this);
+-        }
+-
++        }*/
+     }
+ 
+     @Override
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index 6267b1e460d0d8787a2270511b79ce97fff003d9..62edcc5fcb3c06faa0b2780e0b40da016990e7b4 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -3,11 +3,8 @@ package org.bukkit.craftbukkit;
+ import com.google.common.base.Charsets;
+ import com.google.common.base.Function;
+ import com.google.common.base.Preconditions;
+-import com.google.common.collect.ImmutableList;
+-import com.google.common.collect.ImmutableSet;
+-import com.google.common.collect.Iterators;
+-import com.google.common.collect.Lists;
+-import com.google.common.collect.MapMaker;
++import com.google.common.collect.*;
++import com.google.inject.AbstractModule;
+ import com.mojang.authlib.GameProfile;
+ import com.mojang.brigadier.StringReader;
+ import com.mojang.brigadier.exceptions.CommandSyntaxException;
+@@ -15,38 +12,23 @@ import com.mojang.brigadier.tree.CommandNode;
+ import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.serialization.DynamicOps;
+ import com.mojang.serialization.Lifecycle;
++import com.zaxxer.hikari.HikariConfig;
++import com.zaxxer.hikari.HikariDataSource;
++import eu.matherion.api.ServerState;
++import eu.matherion.api.StateType;
++import eu.matherion.api.database.DatabaseConnection;
++import eu.matherion.api.database.DatabaseManager;
++import eu.matherion.api.redis.RedisManager;
++import eu.matherion.server.config.MatherionityConfig;
++import eu.matherion.server.database.DatabaseManagerImpl;
++import eu.matherion.server.database.impl.HikariConnection;
++import eu.matherion.server.redis.RedisManagerImpl;
+ import io.netty.buffer.ByteBuf;
+ import io.netty.buffer.ByteBufOutputStream;
+ import io.netty.buffer.Unpooled;
+ import io.papermc.paper.util.TraceUtil;
+ import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
+-import java.awt.image.BufferedImage;
+-import java.io.File;
+-import java.io.FileInputStream;
+-import java.io.FileNotFoundException;
+-import java.io.IOException;
+-import java.io.InputStreamReader;
+-import java.nio.ByteBuffer;
+-import java.nio.charset.StandardCharsets;
+-import java.util.ArrayList;
+-import java.util.Arrays;
+-import java.util.Base64;
+-import java.util.Collections;
+-import java.util.HashSet;
+-import java.util.Iterator;
+-import java.util.LinkedHashMap;
+-import java.util.LinkedHashSet;
+-import java.util.List;
+-import java.util.Map;
+-import java.util.Objects;
+-import java.util.Properties;
+-import java.util.Random;
+-import java.util.Set;
+-import java.util.UUID;
+-import java.util.function.Consumer;
+-import java.util.logging.Level;
+-import java.util.logging.Logger;
+-import javax.imageio.ImageIO;
++import net.md_5.bungee.api.chat.BaseComponent;
+ import net.minecraft.advancements.Advancement;
+ import net.minecraft.commands.CommandDispatcher;
+ import net.minecraft.commands.CommandListenerWrapper;
+@@ -59,7 +41,6 @@ import net.minecraft.nbt.NBTBase;
+ import net.minecraft.resources.MinecraftKey;
+ import net.minecraft.resources.RegistryReadOps;
+ import net.minecraft.resources.ResourceKey;
+-//import jline.console.ConsoleReader; // Paper
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.ServerCommand;
+ import net.minecraft.server.bossevents.BossBattleCustom;
+@@ -106,33 +87,12 @@ import net.minecraft.world.level.storage.loot.LootTableRegistry;
+ import net.minecraft.world.phys.Vec3D;
+ import org.apache.commons.lang.Validate;
+ import org.apache.commons.lang3.StringUtils;
+-import org.bukkit.BanList;
+-import org.bukkit.Bukkit;
+-import org.bukkit.ChatColor;
+-import org.bukkit.GameMode;
+-import org.bukkit.Keyed;
+-import org.bukkit.Location;
+-import org.bukkit.NamespacedKey;
+-import org.bukkit.OfflinePlayer;
+-import org.bukkit.Server;
+-import org.bukkit.StructureType;
+-import org.bukkit.UnsafeValues;
++import org.bukkit.*;
+ import org.bukkit.Warning.WarningState;
+-import org.bukkit.World;
+ import org.bukkit.World.Environment;
+-import org.bukkit.WorldCreator;
+ import org.bukkit.block.data.BlockData;
+-import org.bukkit.boss.BarColor;
+-import org.bukkit.boss.BarFlag;
+-import org.bukkit.boss.BarStyle;
+-import org.bukkit.boss.BossBar;
+-import org.bukkit.boss.KeyedBossBar;
+-import org.bukkit.command.Command;
+-import org.bukkit.command.CommandException;
+-import org.bukkit.command.CommandSender;
+-import org.bukkit.command.ConsoleCommandSender;
+-import org.bukkit.command.PluginCommand;
+-import org.bukkit.command.SimpleCommandMap;
++import org.bukkit.boss.*;
++import org.bukkit.command.*;
+ import org.bukkit.configuration.ConfigurationSection;
+ import org.bukkit.configuration.file.YamlConfiguration;
+ import org.bukkit.configuration.serialization.ConfigurationSerialization;
+@@ -146,19 +106,7 @@ import org.bukkit.craftbukkit.command.VanillaCommandWrapper;
+ import org.bukkit.craftbukkit.entity.CraftPlayer;
+ import org.bukkit.craftbukkit.generator.CraftChunkData;
+ import org.bukkit.craftbukkit.help.SimpleHelpMap;
+-import org.bukkit.craftbukkit.inventory.CraftBlastingRecipe;
+-import org.bukkit.craftbukkit.inventory.CraftCampfireRecipe;
+-import org.bukkit.craftbukkit.inventory.CraftFurnaceRecipe;
+-import org.bukkit.craftbukkit.inventory.CraftItemFactory;
+-import org.bukkit.craftbukkit.inventory.CraftItemStack;
+-import org.bukkit.craftbukkit.inventory.CraftMerchantCustom;
+-import org.bukkit.craftbukkit.inventory.CraftRecipe;
+-import org.bukkit.craftbukkit.inventory.CraftShapedRecipe;
+-import org.bukkit.craftbukkit.inventory.CraftShapelessRecipe;
+-import org.bukkit.craftbukkit.inventory.CraftSmithingRecipe;
+-import org.bukkit.craftbukkit.inventory.CraftSmokingRecipe;
+-import org.bukkit.craftbukkit.inventory.CraftStonecuttingRecipe;
+-import org.bukkit.craftbukkit.inventory.RecipeIterator;
++import org.bukkit.craftbukkit.inventory.*;
+ import org.bukkit.craftbukkit.inventory.util.CraftInventoryCreator;
+ import org.bukkit.craftbukkit.map.CraftMapView;
+ import org.bukkit.craftbukkit.metadata.EntityMetadataStore;
+@@ -170,16 +118,11 @@ import org.bukkit.craftbukkit.scoreboard.CraftScoreboardManager;
+ import org.bukkit.craftbukkit.tag.CraftBlockTag;
+ import org.bukkit.craftbukkit.tag.CraftFluidTag;
+ import org.bukkit.craftbukkit.tag.CraftItemTag;
+-import org.bukkit.craftbukkit.util.CraftChatMessage;
+-import org.bukkit.craftbukkit.util.CraftIconCache;
+-import org.bukkit.craftbukkit.util.CraftMagicNumbers;
+-import org.bukkit.craftbukkit.util.CraftNamespacedKey;
+-import org.bukkit.craftbukkit.util.DatFileFilter;
+-import org.bukkit.craftbukkit.util.Versioning;
++import org.bukkit.craftbukkit.util.*;
+ import org.bukkit.craftbukkit.util.permissions.CraftDefaultPermissions;
+ import org.bukkit.entity.Entity;
+ import org.bukkit.entity.Player;
+-import org.bukkit.event.command.UnknownCommandEvent; // Paper
++import org.bukkit.event.command.UnknownCommandEvent;
+ import org.bukkit.event.inventory.InventoryType;
+ import org.bukkit.event.player.PlayerChatTabCompleteEvent;
+ import org.bukkit.event.server.BroadcastMessageEvent;
+@@ -190,30 +133,12 @@ import org.bukkit.event.world.WorldLoadEvent;
+ import org.bukkit.event.world.WorldUnloadEvent;
+ import org.bukkit.generator.ChunkGenerator;
+ import org.bukkit.help.HelpMap;
+-import org.bukkit.inventory.BlastingRecipe;
+-import org.bukkit.inventory.CampfireRecipe;
+-import org.bukkit.inventory.ComplexRecipe;
+-import org.bukkit.inventory.FurnaceRecipe;
+-import org.bukkit.inventory.Inventory;
+-import org.bukkit.inventory.InventoryHolder;
+-import org.bukkit.inventory.ItemStack;
+-import org.bukkit.inventory.Merchant;
+-import org.bukkit.inventory.Recipe;
+-import org.bukkit.inventory.ShapedRecipe;
+-import org.bukkit.inventory.ShapelessRecipe;
+-import org.bukkit.inventory.SmithingRecipe;
+-import org.bukkit.inventory.SmokingRecipe;
+-import org.bukkit.inventory.StonecuttingRecipe;
++import org.bukkit.inventory.*;
+ import org.bukkit.loot.LootTable;
+ import org.bukkit.map.MapView;
+ import org.bukkit.permissions.Permissible;
+ import org.bukkit.permissions.Permission;
+-import org.bukkit.plugin.Plugin;
+-import org.bukkit.plugin.PluginLoadOrder;
+-import org.bukkit.plugin.PluginManager;
+-import org.bukkit.plugin.ServicesManager;
+-import org.bukkit.plugin.SimplePluginManager;
+-import org.bukkit.plugin.SimpleServicesManager;
++import org.bukkit.plugin.*;
+ import org.bukkit.plugin.java.JavaPluginLoader;
+ import org.bukkit.plugin.messaging.Messenger;
+ import org.bukkit.plugin.messaging.StandardMessenger;
+@@ -222,14 +147,24 @@ import org.bukkit.potion.PotionEffectType;
+ import org.bukkit.scheduler.BukkitWorker;
+ import org.bukkit.util.StringUtil;
+ import org.bukkit.util.permissions.DefaultPermissions;
++import org.redisson.api.RedissonClient;
++import org.redisson.config.Config;
+ import org.yaml.snakeyaml.Yaml;
+ import org.yaml.snakeyaml.constructor.SafeConstructor;
+ import org.yaml.snakeyaml.error.MarkedYAMLException;
+ 
+-import net.md_5.bungee.api.chat.BaseComponent; // Spigot
+-
+-import javax.annotation.Nullable; // Paper
+-import javax.annotation.Nonnull; // Paper
++import javax.annotation.Nonnull;
++import javax.annotation.Nullable;
++import javax.imageio.ImageIO;
++import java.awt.image.BufferedImage;
++import java.io.*;
++import java.nio.ByteBuffer;
++import java.nio.charset.StandardCharsets;
++import java.sql.SQLException;
++import java.util.*;
++import java.util.function.Consumer;
++import java.util.logging.Level;
++import java.util.logging.Logger;
+ 
+ public final class CraftServer implements Server {
+     private final String serverName = "Matherionity"; // Paper // Tuinity // Matherionity
+@@ -270,6 +205,25 @@ public final class CraftServer implements Server {
+     public int reloadCount;
+     public static Exception excessiveVelEx; // Paper - Velocity warnings
+ 
++    // Matherion start
++    private DatabaseManager databaseManager;
++    private RedisManager<RedissonClient> redisManager;
++    public ServerState serverState = createServerState();
++
++    public ServerState createServerState() {
++        return new ServerState(
++                MatherionityConfig.serverId,
++                MatherionityConfig.serverName,
++                MatherionityConfig.teamMode,
++                StateType.WAITING,
++                MatherionityConfig.privateServer,
++                0,
++                0
++        );
++    }
++    // Matherion end
++
++
+     static {
+         ConfigurationSerialization.registerClass(CraftOfflinePlayer.class);
+         CraftItemFactory.instance();
+@@ -281,6 +235,9 @@ public final class CraftServer implements Server {
+         this.playerView = Collections.unmodifiableList(Lists.transform(playerList.players, EntityPlayer::getBukkitEntity)); // Matherion - rewrote to lambda reference
+         this.serverVersion = CraftServer.class.getPackage().getImplementationVersion();
+ 
++        this.serverState.setOnline(playerList.getPlayerCount());
++        this.serverState.setMax(playerList.getMaxPlayers());
++
+         Bukkit.setServer(this);
+ 
+         // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
+@@ -386,6 +343,12 @@ public final class CraftServer implements Server {
+                 try {
+                     String message = String.format("Loading %s", plugin.getDescription().getFullName());
+                     plugin.getLogger().info(message);
++
++                    for (Class clazz : plugin.provideDatabaseEntities()) {
++                        getLogger().info("[DB] Creating Dao for " + clazz.getName());
++                        databaseManager.loadDao(clazz);
++                    }
++
+                     plugin.onLoad();
+                 } catch (Throwable ex) {
+                     Logger.getLogger(CraftServer.class.getName()).log(Level.SEVERE, ex.getMessage() + " initializing " + plugin.getDescription().getFullName() + " (Is it up to date?)", ex);
+@@ -437,7 +400,7 @@ public final class CraftServer implements Server {
+         for (CommandNode<CommandListenerWrapper> cmd : dispatcher.a().getRoot().getChildren()) {
+             // Spigot start
+             VanillaCommandWrapper wrapper = new VanillaCommandWrapper(dispatcher, cmd);
+-            if (org.spigotmc.SpigotConfig.replaceCommands.contains( wrapper.getName() ) ) {
++            if (org.spigotmc.SpigotConfig.replaceCommands.contains(wrapper.getName())) {
+                 if (first) {
+                     commandMap.register("minecraft", wrapper);
+                 }
+@@ -586,10 +549,11 @@ public final class CraftServer implements Server {
+     }
+ 
+     // Matherion start
++
+     /**
+-     * @deprecated use {@link EntityPlayer#getBukkitEntity()}
+      * @param entity EntityPlayer
+      * @return The Bukkit Entity
++     * @deprecated use {@link EntityPlayer#getBukkitEntity()}
+      */
+     @Deprecated // Matherion end
+     public Player getPlayer(final EntityPlayer entity) {
+@@ -872,6 +836,7 @@ public final class CraftServer implements Server {
+         org.spigotmc.SpigotConfig.init((File) console.options.valueOf("spigot-settings")); // Spigot
+         com.destroystokyo.paper.PaperConfig.init((File) console.options.valueOf("paper-settings")); // Paper
+         com.tuinity.tuinity.config.TuinityConfig.init((File) console.options.valueOf("tuinity-settings")); // Tuinity - Server Config
++        MatherionityConfig.init((File) console.options.valueOf("matherionity-settings")); // Matherion - Server Config
+         for (WorldServer world : console.getWorlds()) {
+             world.worldDataServer.setDifficulty(config.difficulty);
+             world.setSpawnFlags(config.spawnMonsters, config.spawnAnimals);
+@@ -913,6 +878,13 @@ public final class CraftServer implements Server {
+         pluginManager.clearPlugins();
+         commandMap.clearCommands();
+ 
++        // Matherion start
++        unloadDatabase();
++        unloadRedis();
++
++        serverState = null;
++        // Matherion end
++
+         // Paper start
+         for (Plugin plugin : pluginClone) {
+             entityMetadata.removeAll(plugin);
+@@ -934,7 +906,8 @@ public final class CraftServer implements Server {
+         while (pollCount < 50 && getScheduler().getActiveWorkers().size() > 0) {
+             try {
+                 Thread.sleep(50);
+-            } catch (InterruptedException e) {}
++            } catch (InterruptedException e) {
++            }
+             pollCount++;
+         }
+ 
+@@ -946,13 +919,20 @@ public final class CraftServer implements Server {
+                 author = plugin.getDescription().getAuthors().get(0);
+             }
+             getLogger().log(Level.SEVERE, String.format(
+-                "Nag author: '%s' of '%s' about the following: %s",
+-                author,
+-                plugin.getDescription().getName(),
+-                "This plugin is not properly shutting down its async tasks when it is being reloaded.  This may cause conflicts with the newly loaded version of the plugin"
++                    "Nag author: '%s' of '%s' about the following: %s",
++                    author,
++                    plugin.getDescription().getName(),
++                    "This plugin is not properly shutting down its async tasks when it is being reloaded.  This may cause conflicts with the newly loaded version of the plugin"
+             ));
+             if (console.isDebugging()) TraceUtil.dumpTraceForThread(worker.getThread(), "still running"); // Paper
+         }
++
++        // Matherion start
++        serverState = createServerState();
++        loadRedis();
++        loadDatabase();
++        // Matherion end
++
+         loadPlugins();
+         enablePlugins(PluginLoadOrder.STARTUP);
+         enablePlugins(PluginLoadOrder.POSTWORLD);
+@@ -960,15 +940,92 @@ public final class CraftServer implements Server {
+         org.spigotmc.WatchdogThread.hasStarted = true; // Paper - Disable watchdog early timeout on reload
+     }
+ 
++    // Matherion start
++
++    public void unloadDatabase() {
++        getLogger().info("[DB] Closing connection to the database.");
++        databaseManager.getConnection().closeConnection();
++        databaseManager = null;
++    }
++
++    public void unloadRedis() {
++        getLogger().info("[DB] Closing connection to Redis.");
++        getRedisManager().getServers().remove(getServerState().getName());
++        getRedisManager().getClient().shutdown();
++        redisManager = null;
++    }
++
++    public void loadDatabase() {
++        if (this.databaseManager != null)
++            unloadDatabase();
++
++        HikariConfig hc = new HikariConfig();
++
++        hc.setDriverClassName("com.mysql.cj.jdbc.Driver");
++
++        hc.setJdbcUrl(MatherionityConfig.jdbcUrl);
++        hc.setUsername(MatherionityConfig.databaseUsername);
++        hc.setPassword(MatherionityConfig.databasePassword);
++
++        hc.setMaximumPoolSize(10);
++        hc.setMinimumIdle(2);
++        hc.setPoolName("MatherionityPool");
++        hc.setConnectionTimeout(30000);
++        hc.setMaxLifetime(1800000);
++
++        hc.addDataSourceProperty("cachePrepStmts", "true");
++        hc.addDataSourceProperty("prepStmtCacheSize", "250");
++        hc.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
++        hc.addDataSourceProperty("useServerPrepStmts", "true");
++        hc.addDataSourceProperty("useLocalSessionState", "true");
++        hc.addDataSourceProperty("rewriteBatchedStatements", "true");
++        hc.addDataSourceProperty("cacheResultSetMetadata", "true");
++        hc.addDataSourceProperty("cacheServerConfiguration", "true");
++        hc.addDataSourceProperty("elideSetAutoCommits", "true");
++        hc.addDataSourceProperty("maintainTimeStats", "false");
++        hc.addDataSourceProperty("alwaysSendSetIsolation", "false");
++        hc.addDataSourceProperty("cacheCallableStmts", "true");
++
++        DatabaseConnection<HikariDataSource> conn = new HikariConnection(hc);
++
++        getLogger().info("[DB] Connecting to the database...");
++
++        try {
++            conn.connect();
++            this.databaseManager = new DatabaseManagerImpl(conn);
++        } catch (SQLException e) {
++            getLogger().severe("[DB] An error occurred while creating a database connection: ");
++            e.printStackTrace();
++            shutdown();
++        }
++    }
++
++    public void loadRedis() {
++        if (redisManager != null)
++            unloadRedis();
++
++        getLogger().info("[Redis] Connecting to Redis...");
++
++        Config config = new Config();
++        config.useSingleServer()
++                .setAddress(MatherionityConfig.redisUrl)
++                .setPassword(MatherionityConfig.redisPassword);
++
++        this.redisManager = new RedisManagerImpl(config);
++        this.redisManager.setServerState(String.format("%s-%s", MatherionityConfig.serverName, MatherionityConfig.serverId), getServerState());
++    }
++    // Matherion end
++
+     // Paper start
+     public void waitForAsyncTasksShutdown() {
+         int pollCount = 0;
+ 
+         // Wait for at most 5 seconds for plugins to close their threads
+-        while (pollCount < 10*5 && getScheduler().getActiveWorkers().size() > 0) {
++        while (pollCount < 10 * 5 && getScheduler().getActiveWorkers().size() > 0) {
+             try {
+                 Thread.sleep(100);
+-            } catch (InterruptedException e) {}
++            } catch (InterruptedException e) {
++            }
+             pollCount++;
+         }
+ 
+@@ -980,10 +1037,10 @@ public final class CraftServer implements Server {
+                 author = plugin.getDescription().getAuthors().get(0);
+             }
+             getLogger().log(Level.SEVERE, String.format(
+-                "Nag author: '%s' of '%s' about the following: %s",
+-                author,
+-                plugin.getDescription().getName(),
+-                "This plugin is not properly shutting down its async tasks when it is being shut down. This task may throw errors during the final shutdown logs and might not complete before process dies."
++                    "Nag author: '%s' of '%s' about the following: %s",
++                    author,
++                    plugin.getDescription().getName(),
++                    "This plugin is not properly shutting down its async tasks when it is being shut down. This task may throw errors during the final shutdown logs and might not complete before process dies."
+             ));
+         }
+     }
+@@ -1006,7 +1063,7 @@ public final class CraftServer implements Server {
+         }
+     }
+ 
+-    @SuppressWarnings({ "unchecked", "finally" })
++    @SuppressWarnings({"unchecked", "finally"})
+     private void loadCustomPermissions() {
+         File file = new File(configuration.getString("settings.permissions-file"));
+         FileInputStream stream;
+@@ -1034,7 +1091,8 @@ public final class CraftServer implements Server {
+         } finally {
+             try {
+                 stream.close();
+-            } catch (IOException ex) {}
++            } catch (IOException ex) {
++            }
+         }
+ 
+         if (perms == null) {
+@@ -1426,6 +1484,7 @@ public final class CraftServer implements Server {
+         String msg = getShutdownMessage();
+         return msg != null ? io.papermc.paper.adventure.PaperAdventure.LEGACY_SECTION_UXRC.deserialize(msg) : null;
+     }
++
+     // Paper end
+     @Override
+     @Deprecated // Paper
+@@ -1587,7 +1646,7 @@ public final class CraftServer implements Server {
+         // Only fetch an online UUID in online mode
+         if (net.minecraft.server.MinecraftServer.getServer().getOnlineMode()
+                 || (org.spigotmc.SpigotConfig.bungee && com.destroystokyo.paper.PaperConfig.bungeeOnlineMode)) {
+-            profile = console.getUserCache().getProfile( name );
++            profile = console.getUserCache().getProfile(name);
+         } else {
+             // Make an OfflinePlayer using an offline mode UUID since the name has no profile
+             profile = new GameProfile(UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(Charsets.UTF_8)), name);
+@@ -1596,6 +1655,25 @@ public final class CraftServer implements Server {
+     }
+     // Paper end
+ 
++    // Matherion start
++    @Override
++    public @Nullable
++    DatabaseManager getDatabaseManager() {
++        return this.databaseManager;
++    }
++
++    @Override
++    public @Nullable
++    RedisManager<RedissonClient> getRedisManager() {
++        return this.redisManager;
++    }
++
++    @Override
++    public ServerState getServerState() {
++        return serverState;
++    }
++    // Matherion end
++
+     @Override
+     @Deprecated
+     public OfflinePlayer getOfflinePlayer(String name) {
+@@ -1607,10 +1685,10 @@ public final class CraftServer implements Server {
+             // Spigot Start
+             GameProfile profile = null;
+             // Only fetch an online UUID in online mode
+-            if ( getOnlineMode()
+-                    || com.destroystokyo.paper.PaperConfig.isProxyOnlineMode() ) // Paper - Handle via setting
++            if (getOnlineMode()
++                    || com.destroystokyo.paper.PaperConfig.isProxyOnlineMode()) // Paper - Handle via setting
+             {
+-                profile = console.getUserCache().getProfile( name );
++                profile = console.getUserCache().getProfile(name);
+             }
+             // Spigot end
+             if (profile == null) {
+@@ -1709,11 +1787,11 @@ public final class CraftServer implements Server {
+         Validate.notNull(type, "Type cannot be null");
+ 
+         switch (type) {
+-        case IP:
+-            return new CraftIpBanList(playerList.getIPBans());
+-        case NAME:
+-        default:
+-            return new CraftProfileBanList(playerList.getProfileBans());
++            case IP:
++                return new CraftIpBanList(playerList.getIPBans());
++            case NAME:
++            default:
++                return new CraftProfileBanList(playerList.getProfileBans());
+         }
+     }
+ 
+@@ -1875,6 +1953,7 @@ public final class CraftServer implements Server {
+     public Merchant createMerchant(net.kyori.adventure.text.Component title) {
+         return new org.bukkit.craftbukkit.inventory.CraftMerchantCustom(title == null ? InventoryType.MERCHANT.defaultTitle() : title);
+     }
++
+     // Paper end
+     @Override
+     @Deprecated // Paper
+@@ -1930,6 +2009,7 @@ public final class CraftServer implements Server {
+     public net.kyori.adventure.text.Component motd() {
+         return io.papermc.paper.adventure.PaperAdventure.asAdventure(new net.minecraft.network.chat.ChatComponentText(console.getMotd()));
+     }
++
+     // Paper end
+     @Override
+     public String getMotd() {
+@@ -1962,8 +2042,7 @@ public final class CraftServer implements Server {
+ 
+     public List<String> tabCompleteCommand(Player player, String message, WorldServer world, Vec3D pos) {
+         // Spigot Start
+-        if ( (org.spigotmc.SpigotConfig.tabComplete < 0 || message.length() <= org.spigotmc.SpigotConfig.tabComplete) && !message.contains( " " ) )
+-        {
++        if ((org.spigotmc.SpigotConfig.tabComplete < 0 || message.length() <= org.spigotmc.SpigotConfig.tabComplete) && !message.contains(" ")) {
+             return ImmutableList.of();
+         }
+         // Spigot End
+@@ -2309,7 +2388,7 @@ public final class CraftServer implements Server {
+     // Paper - Add getTPS API - Further improve tick loop
+     @Override
+     public double[] getTPS() {
+-        return new double[] {
++        return new double[]{
+                 net.minecraft.server.MinecraftServer.getServer().tps1.getAverage(),
+                 net.minecraft.server.MinecraftServer.getServer().tps5.getAverage(),
+                 net.minecraft.server.MinecraftServer.getServer().tps15.getAverage()
+@@ -2328,42 +2407,43 @@ public final class CraftServer implements Server {
+     // Paper end
+ 
+     // Spigot start
+-    private final org.bukkit.Server.Spigot spigot = new org.bukkit.Server.Spigot()
+-    {
++    private final org.bukkit.Server.Spigot spigot = new org.bukkit.Server.Spigot() {
+ 
+         @Deprecated
+         @Override
+-        public YamlConfiguration getConfig()
+-        {
++        public YamlConfiguration getConfig() {
+             return org.spigotmc.SpigotConfig.config;
+         }
+ 
+         @Override
+-        public YamlConfiguration getBukkitConfig()
+-        {
++        public YamlConfiguration getBukkitConfig() {
+             return configuration;
+         }
+ 
+         @Override
+-        public YamlConfiguration getSpigotConfig()
+-        {
++        public YamlConfiguration getSpigotConfig() {
+             return org.spigotmc.SpigotConfig.config;
+         }
+ 
+         @Override
+-        public YamlConfiguration getPaperConfig()
+-        {
++        public YamlConfiguration getPaperConfig() {
+             return com.destroystokyo.paper.PaperConfig.config;
+         }
+ 
+         // Tuinity start - add config to timings report
+         @Override
+-        public YamlConfiguration getTuinityConfig()
+-        {
++        public YamlConfiguration getTuinityConfig() {
+             return com.tuinity.tuinity.config.TuinityConfig.config;
+         }
+         // Tuinity end - add config to timings report
+ 
++        // Matherion start
++        @Override
++        public YamlConfiguration getMatherionityConfig() {
++            return MatherionityConfig.config;
++        }
++        // Matherion end
++
+         @Override
+         public void restart() {
+             org.spigotmc.RestartCommand.restart();
+@@ -2384,8 +2464,7 @@ public final class CraftServer implements Server {
+         }
+     };
+ 
+-    public org.bukkit.Server.Spigot spigot()
+-    {
++    public org.bukkit.Server.Spigot spigot() {
+         return spigot;
+     }
+     // Spigot end
+@@ -2422,6 +2501,7 @@ public final class CraftServer implements Server {
+ 
+     // Paper start
+     private Iterable<? extends net.kyori.adventure.audience.Audience> adventure$audiences;
++
+     @Override
+     public Iterable<? extends net.kyori.adventure.audience.Audience> audiences() {
+         if (this.adventure$audiences == null) {
+@@ -2491,7 +2571,7 @@ public final class CraftServer implements Server {
+     public com.destroystokyo.paper.profile.PlayerProfile createProfile(@Nullable UUID uuid, @Nullable String name) {
+         Player player = uuid != null ? Bukkit.getPlayer(uuid) : (name != null ? Bukkit.getPlayerExact(name) : null);
+         if (player != null) {
+-            return new com.destroystokyo.paper.profile.CraftPlayerProfile((CraftPlayer)player);
++            return new com.destroystokyo.paper.profile.CraftPlayerProfile((CraftPlayer) player);
+         }
+         return new com.destroystokyo.paper.profile.CraftPlayerProfile(uuid, name);
+     }
+@@ -2507,9 +2587,20 @@ public final class CraftServer implements Server {
+     }
+ 
+     private com.destroystokyo.paper.entity.ai.MobGoals mobGoals = new com.destroystokyo.paper.entity.ai.PaperMobGoals();
++
+     @Override
+     public com.destroystokyo.paper.entity.ai.MobGoals getMobGoals() {
+         return mobGoals;
+     }
++
+     // Paper end
++
++    // Matherion start
++    // TODO: implement
++    public void createGuice() {
++    }
++    // Matherion end
++
++    public static class BaseDIModule extends AbstractModule {
++    }
+ }
+diff --git a/src/main/java/org/bukkit/craftbukkit/Main.java b/src/main/java/org/bukkit/craftbukkit/Main.java
+index 145748b5ca095cd555fd1f085a596bf0f58fea13..b6f56ec36d3c3209b0e65eb4e9ca91e315680b03 100644
+--- a/src/main/java/org/bukkit/craftbukkit/Main.java
++++ b/src/main/java/org/bukkit/craftbukkit/Main.java
+@@ -148,6 +148,14 @@ public class Main {
+                         .describedAs("Yml file");
+                 /* Conctete End - Server Config */
+ 
++                // Matherionity Start - Server Config
++                acceptsAll(asList("matherionity", "matherionity-settings"), "File for Matherionity settings")
++                        .withRequiredArg()
++                        .ofType(File.class)
++                        .defaultsTo(new File("matherionity.yml"))
++                        .describedAs("Yml file");
++                /* Matherionity End - Server Config */
++
+                 // Paper start
+                 acceptsAll(asList("server-name"), "Name of the server")
+                         .withRequiredArg()
+diff --git a/src/main/java/org/bukkit/craftbukkit/scheduler/MinecraftInternalPlugin.java b/src/main/java/org/bukkit/craftbukkit/scheduler/MinecraftInternalPlugin.java
+index 49dc0c441b9dd7e7745cf15ced67f383ebee1f99..68946365b4dd1f3702bd0a5dea9345840c6cc20a 100644
+--- a/src/main/java/org/bukkit/craftbukkit/scheduler/MinecraftInternalPlugin.java
++++ b/src/main/java/org/bukkit/craftbukkit/scheduler/MinecraftInternalPlugin.java
+@@ -1,6 +1,7 @@
+ package org.bukkit.craftbukkit.scheduler;
+ 
+ 
++import com.google.inject.AbstractModule;
+ import org.bukkit.Server;
+ import org.bukkit.command.Command;
+ import org.bukkit.command.CommandSender;
+@@ -13,6 +14,7 @@ import org.bukkit.plugin.PluginLogger;
+ 
+ import java.io.File;
+ import java.io.InputStream;
++import java.util.ArrayList;
+ import java.util.List;
+ 
+ public class MinecraftInternalPlugin extends PluginBase {
+@@ -95,6 +97,16 @@ public class MinecraftInternalPlugin extends PluginBase {
+         throw new UnsupportedOperationException("Not supported.");
+     }
+ 
++    @Override
++    public List<? extends AbstractModule> provideDIModules() {
++        return new ArrayList<>();
++    }
++
++    @Override
++    public List<Class> provideDatabaseEntities() {
++        return new ArrayList<>();
++    }
++
+     @Override
+     public void onLoad() {
+         throw new UnsupportedOperationException("Not supported.");
