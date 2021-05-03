@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 3 May 2021 15:25:25 +0200
+Subject: [PATCH] fix: make ServerState Serializable
+
+
+diff --git a/src/main/java/eu/matherion/api/ServerState.java b/src/main/java/eu/matherion/api/ServerState.java
+index ee649489ee738bbd39da713423fdaef5841a3f18..62fa0891938098b7a2d3c84fed2299f9d90635f7 100644
+--- a/src/main/java/eu/matherion/api/ServerState.java
++++ b/src/main/java/eu/matherion/api/ServerState.java
+@@ -2,7 +2,9 @@ package eu.matherion.api;
+ 
+ import org.jetbrains.annotations.Nullable;
+ 
+-public class ServerState {
++import java.io.Serializable;
++
++public class ServerState implements Serializable {
+ 
+     int id = 0;
+ 
