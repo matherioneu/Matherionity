@@ -1,84 +1,216 @@
-<div align=center>
-    <!-- ./blob/master/tuinity-logo.webp -->
-    <img src="./tuinity-logo.webp" width="512">
-    <br /><br />
-    <p>Fork of <a href="https://github.com/PaperMC/Paper">Paper</a> aimed at improving server performance at high playercounts.</p>
-    <img alt="Java CI" src="https://github.com/Spottedleaf/Tuinity/workflows/Java%20CI/badge.svg">
-    <a href="https://irc.spi.gt/iris/?channels=tuinity">
-        <img alt="IRC" src="https://img.shields.io/badge/irc-%23tuinity-%23DF8826">
-    </a>
-    <a href="https://discord.gg/tuinity">
-        <img alt="Discord" src="https://img.shields.io/badge/discord-discord.gg%2Ftuinity-%237289da">
-    </a>
-</div>
+# Matherionity
 
-## How To (Server Admins)
-Tuinity uses the same paperclip jar system that Paper uses.
+The truly batteries-included Paper/Tuinity fork.
 
-You can download the latest build of Tuinity by going [here](https://ci.codemc.io/job/Spottedleaf/job/Tuinity/).
+## The new API
 
-You can also [build it yourself](https://github.com/Spottedleaf/Tuinity#building).
+While the old, legacy Bukkit API is still accessible and will continue to be updated, 
+when making new plugins, you can choose to use the new API. The new API is not fully
+complete though, as Matherionity is in early development. Also some parts of the API
+are subject to change, however that may only happen in major releases.
 
-## How To (Plugin developers)
-In order to use Tuinity as a dependency you must [build it yourself](https://github.com/Spottedleaf/Tuinity#building).
-Each time you want to update your dependency you must re-build Tuinity.
+## Features
+- Redis
+- Database Connection
+- New Plugin Manager, inspired by Velocity
 
-Tuinity-API maven dependency:
-```xml
-<dependency>
-    <groupId>com.tuinity</groupId>
-    <artifactId>tuinity-api</artifactId>
-    <version>1.16.5-R0.1-SNAPSHOT</version>
-    <scope>provided</scope>
- </dependency>
- ```
+## Requirements
+- Java 11+ 
+- MySQL
+- Redis
 
-Tuinity-Server maven dependency:
-```xml
-<dependency>
-    <groupId>com.tuinity</groupId>
-    <artifactId>tuinity</artifactId>
-    <version>1.16.5-R0.1-SNAPSHOT</version>
-    <scope>provided</scope>
-</dependency>
+### Development Requirements:
+- Maven
+- Git
+- Bash
+- GNU Patch
+
+## Getting started
+
+Assuming you have a Matherionity jar, create a new folder with it inside. Open your terminal 
+and enter:
+
+```shell
+$ java -jar matherionity.jar
 ```
 
-There is no repository required since the artifacts should be locally installed
-via building Tuinity.
+This will start the Matherionity server.
 
-## Building
+## Development
 
-Requirements:
-- You need `git` installed, with a configured user name and email. 
-   On Windows you need to run from git bash.
-- You need `maven` installed.
-- You need `jdk` 8+ installed to compile (and `jre` 8+ to run).
-- Anything else that `paper` requires to build.
+Matherionity uses patches. To learn more about them, see [Understanding Patches](https://github.com/PaperMC/Paper/blob/master/CONTRIBUTING.md#understanding-patches).
 
-If all you want is a paperclip server jar, just run `./tuinity jar`.
+In the folder root, you will have a `tuinity` shell script which
+is useful for development.
 
-Otherwise, to setup the `Tuinity-API` and `Tuinity-Server` repo, just run the following command
-in your project root `./tuinity patch` additionally, after you run `./tuinity patch` you can run `./tuinity build` to build the 
-respective api and server jars.
+### Compiling the JAR
 
-`./tuinity patch` should initialize the repo such that you can now start modifying and creating
-patches. The folder `Tuinity-API` is the api repo and the `Tuinity-Server` folder
-is the server repo and will contain the source files you will modify.
+If you just want to compile the jar, use:
 
-#### Creating a patch
-Patches are effectively just commits in either `Tuinity-API` or `Tuinity-Server`.
-To create one, just add a commit to either repo and run `./tuinity rb`, and a
-patch will be placed in the patches folder. Modifying commits will also modify its
-corresponding patch file.
+```shell
+$ ./tuinity jar
+```
 
-## License
-The PATCHES-LICENSE file describes the license for api & server patches,
-found in `./patches` and its subdirectories except when noted otherwise.
+Note: In Windows, please use Git Bash.
 
-Everything else is licensed under the MIT license, except when note otherwise.
-See https://github.com/starlis/empirecraft and https://github.com/electronicboy/byof
-for the license of material used/modified by this project.
+### Modifying the code
 
-### Note
+If you want to modify the code, use:
 
-The fork is based off of aikar's EMC framework found [here](https://github.com/starlis/empirecraft).
+```shell
+$ ./tuinity apply
+```
+
+This command will prepare everything for you and apply all patches. Once it's finished,
+you will see two folders - Tuinity-Server & Tuinity-API.
+
+### Rebuilding patches
+
+To rebuild all patches, first commit in the Tuinity-Server and/or Tuinity-API repository.
+Then, use:
+
+```shell
+$ ./tuinity rebuild
+```
+
+This will rebuild all patches.
+
+## The API
+
+### Redis
+
+The default RedisManager implementation (`eu.matherion.server.redis.RedisManagerImpl`) uses the Redisson library.
+
+You can access the RedisManager via `Server#getBukkitManager()`.
+
+Example:
+```java
+class YourPlugin() {
+    public void yourFunction() {
+       // ...
+       RedisManager redisManager = Bukkit.getServer().getRedisManager();
+    }
+}
+```
+
+### Available Functions
+
+`eu.matherion.api.redis.RedisManager` is an interface. If you want to use a different library for Redis (Jedis, for example), you can create your own RedisManager
+implementation.
+
+#### T getClient();
+
+Gets the Client. The basic RedisManager implementation uses Redisson &mdash;
+See the [Redisson Docs](https://github.com/redisson/redisson/wiki/Table-of-Content) for more info.
+
+#### Map<String, ServerState> getServers();
+
+Gets all servers from Redis.
+
+#### void removeServer(String server);
+
+Removes the ServerState of a certain server.
+
+#### Future<Map<String, ServerState>> getServersAsync();
+
+This function is not implemented yet. If you try to use it, it will throw a `java.lang.UnsupportedOperationException`.
+
+#### void setServerState(String server, ServerState serverState);
+
+Sets the `ServerState` of a certain server. If you want to set a state of the current server,
+use `Server#setServerState(ServerState)` instead.
+
+#### Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException;
+
+This function is not implemented yet. If you try to use it, it will throw a `java.lang.UnsupportedOperationException`.
+
+## Database
+
+Matherionity uses ORMLite for all database actions. In order to use the database, you will have to create a model (essentially just a POJO with few annotations). 
+
+For example:
+
+```java
+package eu.matherion.plugin.db;
+
+import com.j256.ormlite.field.DatabaseField;
+import com.j256.ormlite.table.DatabaseTable;
+
+@DatabaseTable
+class User {
+
+    @DatabaseField(id = true)
+    private Integer id;
+
+    @DatabaseField(unique = true)
+    private String username;
+
+    @DatabaseField
+    private String password;
+    
+    public Integer getId() {
+        return id;
+    }
+    
+    // ...
+}
+```
+
+In your Main class, register the model like this:
+
+```java
+package eu.matherion.plugin;
+
+import eu.matherion.plugin.db.User;
+import org.bukkit.plugin.JavaPlugin;
+import java.util.List;
+
+class Main extends JavaPlugin {
+
+    @Override
+    public List<Class> provideDatabaseEntities() {
+        return List.of(User.class);
+    }
+
+}
+```
+
+And that's it. Now, how the heck do I make queries? For that, you can access the DatabaseManager through `Server#getDatabaseManager()`.
+The DatabaseManager has a `getDao(Class)` function. Use it to get a DAO (Data Access Object) class for your 
+model (in this case User).
+
+```java
+package eu.matherion.plugin;
+
+// ...
+
+import com.j256.ormlite.dao.Dao;
+
+class Main extends JavaPlugin {
+
+    // ...
+
+    @Override
+    public void onEnable() {
+        // Integer is the ID type, User is the model
+        Dao<User, Integer> userDao = Bukkit.getServer().getDatabaseManager().getDao(User.class);
+    
+        // Creating users:
+        User newUser = userDao.create(new User(/* your logic to create the User class */));
+        
+        // Updaing users:
+        User existingUser = /* your logic to fetch the user */;
+        existingUser.username = "different username";
+        userDao.update(existingUser);
+    
+        // Fetching users:
+        userDao.queryForEq("username", "username"); // get by row, value
+        userDao.queryForAll(); // get all
+        userDao.queryForId(1); // get by id
+        userDao.queryForSameId(/* another User */); // get by the same id as another User class instance
+    }
+
+}
+```
+
+For more info, please refer to the ORMLite [Documentation](https://ormlite.com/javadoc/ormlite-core/doc-files/ormlite.html#License) or [JavaDocs](https://ormlite.com/javadoc).
