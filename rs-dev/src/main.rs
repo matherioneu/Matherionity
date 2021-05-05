@@ -3,15 +3,15 @@ const MVN_PATH: &str = "/usr/bin/mvn";
 const PARENT_PATH: &str = "../";
 const SPIGOT_SERVER_PATH: &str = "../Tuinity-Server";
 const DEV_SERVER_PATH: &str = "../dev-server";
-
-use std::process::Command;
+const TEST_PLUGIN_PATH: &str = "../test-plugin";
 
 use execute::Execute;
-use std::path::{Path, PathBuf};
-use std::fs::{create_dir, metadata, File};
-use std::env::{set_current_dir, current_dir};
-use std::io::Write;
 use project_root::{get_project_root};
+use std::process::Command;
+use std::path::{PathBuf};
+use std::fs::{create_dir, metadata, copy, File};
+use std::env::{set_current_dir, args, Args};
+use std::io::Write;
 
 /// This simple Rust app uses Maven CLI to compile
 /// the API & Server, then starts the server automatically.
@@ -20,30 +20,39 @@ use project_root::{get_project_root};
 
 /// Let's go
 fn main() {
+    let root_dir: PathBuf = get_project_root().unwrap();
+    let mut arg: Args = args();
+
     // Create the dev server path if it doesn't exist
     if !metadata(DEV_SERVER_PATH).is_ok() {
         println!("Creating {}", DEV_SERVER_PATH);
         create_dir(DEV_SERVER_PATH);
     }
 
-    let root_dir: PathBuf = get_project_root().unwrap();
+    if arg.any(|a| a == "--recompile") {
+        println!("Running `package` against the parent ({})", PARENT_PATH);
+        set_current_dir(PARENT_PATH);
+        run_command(
+            Command::new(MVN_PATH)
+                .arg("package")
+        );
 
+        // Go back
+        set_current_dir(root_dir);
+    }
     // Compile the parent
-    println!("Running `package` against the parent ({})", PARENT_PATH);
-    set_current_dir(PARENT_PATH);
-    run_command(
-        Command::new(MVN_PATH)
-            .arg("package")
-    );
 
-    // Go back
-    set_current_dir(root_dir);
+    // Copy the compiled plugin jar
+    copy(
+        format!("{}{}", TEST_PLUGIN_PATH, "target/test-plugin.jar"),
+        format!("{}{}", DEV_SERVER_PATH, "plugins/test-plugin.jar")
+    );
 
     // Set the current dir to the path of the dev server
     set_current_dir(DEV_SERVER_PATH);
 
     // Create eula.txt
-    let mut eula = File::create("eula.txt");
+    let eula = File::create("eula.txt");
     eula.unwrap().write_all(b"eula=true");
 
     // Start the server

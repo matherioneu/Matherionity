@@ -25,7 +25,8 @@
     <modules>
         <module>Tuinity-API</module>
         <module>Tuinity-Server</module>
-        <module>Paper${file.separator}Paper-MojangAPI</module> <!-- We don't plan on patching this, so this hack is good enough. -->
+        <module>Paper${file.separator}Paper-MojangAPI</module>
+        <module>test-plugin</module> <!-- We don't plan on patching this, so this hack is good enough. -->
     </modules>
 
     <!-- Matherion start -->
