@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 5 May 2021 05:47:21 +0200
+Subject: [PATCH] fix(server): add missing removeServer()
+
+
+diff --git a/src/main/java/eu/matherion/api/redis/RedisManager.java b/src/main/java/eu/matherion/api/redis/RedisManager.java
+index e09b4ba91ab4c2762adee4d13a61164b4bfa59ec..ef6a4d75d4fd678dd58df99ac51f336ddf4b82ca 100644
+--- a/src/main/java/eu/matherion/api/redis/RedisManager.java
++++ b/src/main/java/eu/matherion/api/redis/RedisManager.java
+@@ -12,7 +12,9 @@ public interface RedisManager<T> {
+ 
+      Map<String, ServerState> getServers();
+ 
+-     Future<Map<String, ServerState>> getServersAsync();
++    void removeServer(String server);
++
++    Future<Map<String, ServerState>> getServersAsync();
+ 
+      void setServerState(String server, ServerState serverState);
+ 
