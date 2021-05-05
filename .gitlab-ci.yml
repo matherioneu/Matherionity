@@ -3,28 +3,16 @@ image: adoptopenjdk/openjdk11:alpine
 stages:
   - build
 
-variables:
-  # Disable the default pre-run script
-  # that clones the repository
-  GIT_STRATEGY: none
+
 
 before_script:
   # Install all required dependencies
-  - apk --no-cache add maven git patch bash curl openssh-client
+  - apk --no-cache add maven git patch bash curl
   # Setup Git
   - git config --global user.name "Friendly Matherionity CI"
   - git config --global user.email "ci@git.matherion.dev"
-  # Add SSH key
-  - eval $(ssh-agent -s)
-  - bash -c "echo $SSH_PRIVATE_KEY > ${CI_PROJECT_PATH}/ssh_privkey"
-  - git config core.sshCommand "ssh -i ${CI_PROJECT_PATH}/ssh_privkey -F /dev/null"
-  # Create a new empty repo
-  - cd "${CI_PROJECT_DIR}"
-  - git init
-  # Fetch the CI commit
-  - git remote add origin "git@${CI_SERVER_HOST}:${CI_PROJECT_PATH}.git"
-  - git fetch origin '${CI_COMMIT_SHA}'
-  - git reset --hard FETCH_HEAD
+  # Submodules
+  - git submodule update --init --recursive
 
 maven-build:
   stage: build
