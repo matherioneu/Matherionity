@@ -1,16 +1,13 @@
-name: Build main
+name: Build 
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
-        java: [11, 8]
-
+        java: [8,11,15]
     steps:
     - uses: actions/checkout@v2
 
@@ -27,12 +24,19 @@ jobs:
 
     - name: Patch Tuinity
       run: |
-        git config --global user.email "you@example.com"
-        git config --global user.name "Your Name"
+        git config --global user.email "ci@git.matherion.dev"
+        git config --global user.name "Friendly Matherionity CI"
         git submodule update --init --recursive
         ./tuinity jar
-        
-    - uses: actions/upload-artifact@v2
+  
+    - name: Upload API artifact
+      uses: actions/upload-artifact@v2
       with:
-        name: Tuinity-JDK${{ matrix.java }}
-        path: tuinity-paperclip.jar
+        name: matherionity-1.16.5-api.jar
+        path: Tuinity-API/target/matherionity-api.jar
+       
+    - name: Upload server artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: matherionity-1.16.5-server.jar
+        path: Tuinity-Server/target/matherionity-1.16.5.jar
