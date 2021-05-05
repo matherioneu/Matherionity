@@ -7,3 +7,4 @@ edition = "2018"
 
 [dependencies]
 execute = "0.2.9"
+project-root = "0.2.2"
