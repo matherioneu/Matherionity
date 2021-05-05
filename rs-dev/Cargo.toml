@@ -1,0 +1,9 @@
+[package]
+name = "rs-dev"
+description = "Simple Rust app that spins up a dev server for Matherionity after building it with Maven."
+version = "0.1.0"
+authors = ["Mia <vottus@vott.us>"]
+edition = "2018"
+
+[dependencies]
+execute = "0.2.9"
