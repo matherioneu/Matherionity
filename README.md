@@ -15,7 +15,10 @@ are subject to change, however that may only happen in major releases.
 - New Plugin Manager, inspired by Velocity (TBD)
 
 ## Requirements
-- Java 11+ 
+- Java 15+
+    - Though Matherionity will most likely work with older versions,
+      it is not supported and the CI is only setup to make Java 15 builds.
+      If you want to use older Java versions, you will have to build it manually.
 - MySQL
 - Redis
 
