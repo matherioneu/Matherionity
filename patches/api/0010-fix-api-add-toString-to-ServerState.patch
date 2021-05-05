@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 5 May 2021 12:57:34 +0200
+Subject: [PATCH] fix(api): add toString() to ServerState
+
+
+diff --git a/src/main/java/eu/matherion/api/ServerState.java b/src/main/java/eu/matherion/api/ServerState.java
+index 62fa0891938098b7a2d3c84fed2299f9d90635f7..e9356b9f1463b49b49a5371f2b0bb0b7e511be81 100644
+--- a/src/main/java/eu/matherion/api/ServerState.java
++++ b/src/main/java/eu/matherion/api/ServerState.java
+@@ -112,4 +112,18 @@ public class ServerState implements Serializable {
+         this.max = max;
+         return this;
+     }
++
++    @Override
++    public String toString() {
++        final StringBuilder sb = new StringBuilder("ServerState{");
++        sb.append("id=").append(id);
++        sb.append(", name='").append(name).append('\'');
++        sb.append(", teamMode=").append(teamMode);
++        sb.append(", stateType=").append(stateType);
++        sb.append(", privateServer=").append(privateServer);
++        sb.append(", online=").append(online);
++        sb.append(", max=").append(max);
++        sb.append('}');
++        return sb.toString();
++    }
+ }
