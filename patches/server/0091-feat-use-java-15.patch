@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 5 May 2021 13:14:05 +0200
+Subject: [PATCH] feat: use java 15
+
+
+diff --git a/pom.xml b/pom.xml
+index 8e41bda5972f9cc92b900fe93d9a03c044b92d03..b973ac28281bd821109249d8007bbfd70b309f37 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -14,8 +14,8 @@
+         <bt.name>git</bt.name>
+         <minecraft.version>1.16.5</minecraft.version>
+         <minecraft_version>1_16_R3</minecraft_version>
+-        <maven.compiler.source>1.8</maven.compiler.source>
+-        <maven.compiler.target>1.8</maven.compiler.target>
++        <maven.compiler.source>15</maven.compiler.source>
++        <maven.compiler.target>15</maven.compiler.target>
+     </properties>
+ 
+     <parent>

@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 5 May 2021 13:13:58 +0200
+Subject: [PATCH] feat: use java 15
+
+
+diff --git a/pom.xml b/pom.xml
+index 4acbac2551aaab8902674708d61ed5d2febc3015..d5074f759c521c2b6effe63026509ceba2624b99 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -19,8 +19,8 @@
+ 
+     <properties>
+         <skipTests>true</skipTests>
+-        <maven.compiler.source>1.8</maven.compiler.source>
+-        <maven.compiler.target>1.8</maven.compiler.target>
++        <maven.compiler.source>15</maven.compiler.source>
++        <maven.compiler.target>15</maven.compiler.target>
+         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+     </properties>
+ 

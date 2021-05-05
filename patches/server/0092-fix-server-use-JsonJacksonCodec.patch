@@ -1,0 +1,26 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 5 May 2021 13:57:09 +0200
+Subject: [PATCH] fix(server): use JsonJacksonCodec
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index ba054b4b47087f536e33be0bec20db7d14d169a2..2b5780c9a95c3a7caae7656b7aa81197fccbc8f4 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -148,6 +148,7 @@ import org.bukkit.scheduler.BukkitWorker;
+ import org.bukkit.util.StringUtil;
+ import org.bukkit.util.permissions.DefaultPermissions;
+ import org.redisson.api.RedissonClient;
++import org.redisson.codec.JsonJacksonCodec;
+ import org.redisson.config.Config;
+ import org.yaml.snakeyaml.Yaml;
+ import org.yaml.snakeyaml.constructor.SafeConstructor;
+@@ -1007,6 +1008,7 @@ public final class CraftServer implements Server {
+         getLogger().info("[Redis] Connecting to Redis...");
+ 
+         Config config = new Config();
++        config.setCodec(new JsonJacksonCodec());
+         config.useSingleServer()
+                 .setAddress(MatherionityConfig.redisUrl)
+                 .setPassword(MatherionityConfig.redisPassword);
