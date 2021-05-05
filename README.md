@@ -12,7 +12,7 @@ are subject to change, however that may only happen in major releases.
 ## Features
 - Redis
 - Database Connection
-- New Plugin Manager, inspired by Velocity
+- New Plugin Manager, inspired by Velocity (TBD)
 
 ## Requirements
 - Java 11+ 
@@ -81,11 +81,11 @@ This will rebuild all patches.
 
 The default RedisManager implementation (`eu.matherion.server.redis.RedisManagerImpl`) uses the Redisson library.
 
-You can access the RedisManager via `Server#getBukkitManager()`.
+You can access the RedisManager via `Server#getRedisManager()`.
 
 Example:
 ```java
-class YourPlugin() {
+class YourPlugin {
     public void yourFunction() {
        // ...
        RedisManager redisManager = Bukkit.getServer().getRedisManager();
@@ -96,7 +96,7 @@ class YourPlugin() {
 ### Available Functions
 
 `eu.matherion.api.redis.RedisManager` is an interface. If you want to use a different library for Redis (Jedis, for example), you can create your own RedisManager
-implementation.
+implementation (TBD - for now it cannot be changed).
 
 #### T getClient();
 
@@ -214,3 +214,7 @@ class Main extends JavaPlugin {
 ```
 
 For more info, please refer to the ORMLite [Documentation](https://ormlite.com/javadoc/ormlite-core/doc-files/ormlite.html#License) or [JavaDocs](https://ormlite.com/javadoc).
+
+If you however need to use the raw connection, you can get a `eu.matherion.api.database DatabaseConnection` via
+`DatabaseManager#getConnection()`. DatabaseConnection is a small interface providing DatabaseManager with Java's Connection.
+The default implementation (eu.matherion.server.database.impl.HikariConnection) uses HikariCP, but if you want to create the connection differently or use a different SQL database, you can create your own implementation (TBD - for now it's only Hikari&MySQL).
