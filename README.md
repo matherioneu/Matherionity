@@ -82,7 +82,7 @@ This will rebuild all patches.
 
 ### Redis
 
-The default RedisManager implementation (`eu.matherion.server.redis.RedisManagerImpl`) uses the Redisson library.
+The default RedisManager implementation (`eu.matherion.server.redis.impl.RedissonManager`) uses the Redisson library.
 
 You can access the RedisManager via `Server#getRedisManager()`.
 
@@ -99,7 +99,7 @@ class YourPlugin {
 ### Available Functions
 
 `eu.matherion.api.redis.RedisManager` is an interface. If you want to use a different library for Redis (Jedis, for example), you can create your own RedisManager
-implementation (TBD - for now it cannot be changed).
+implementation.
 
 #### T getClient();
 
@@ -220,4 +220,4 @@ For more info, please refer to the ORMLite [Documentation](https://ormlite.com/j
 
 If you however need to use the raw connection, you can get a `eu.matherion.api.database DatabaseConnection` via
 `DatabaseManager#getConnection()`. DatabaseConnection is a small interface providing DatabaseManager with Java's Connection.
-The default implementation (eu.matherion.server.database.impl.HikariConnection) uses HikariCP, but if you want to create the connection differently or use a different SQL database, you can create your own implementation (TBD - for now it's only Hikari&MySQL).
+The default implementation (eu.matherion.server.database.impl.HikariConnection) uses HikariCP, but if you want to create the connection differently or use a different SQL database, you can create your own implementation.

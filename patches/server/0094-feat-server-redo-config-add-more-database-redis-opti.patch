@@ -1,0 +1,622 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 7 May 2021 00:39:36 +0200
+Subject: [PATCH] feat(server): redo config, add more database/redis options
+
+
+diff --git a/src/main/java/eu/matherion/server/config/MatherionityConfig.java b/src/main/java/eu/matherion/server/config/MatherionityConfig.java
+index 90789026adc5b4183ed60101e850f19d4eefdfb0..a34ffc0f3dc13b74a2ae6a92cb399428410ea0d5 100644
+--- a/src/main/java/eu/matherion/server/config/MatherionityConfig.java
++++ b/src/main/java/eu/matherion/server/config/MatherionityConfig.java
+@@ -1,185 +1,224 @@
+ package eu.matherion.server.config;
+ 
+-import com.destroystokyo.paper.util.SneakyThrow;
+ import eu.matherion.api.TeamMode;
+-import org.bukkit.Bukkit;
++import eu.matherion.server.database.impl.HikariConnection;
++import eu.matherion.server.redis.impl.RedissonManager;
++import org.bukkit.configuration.ConfigurationSection;
++import org.bukkit.configuration.InvalidConfigurationException;
+ import org.bukkit.configuration.file.YamlConfiguration;
+ import org.jetbrains.annotations.Nullable;
+ 
+ import java.io.File;
++import java.io.IOException;
++import java.lang.reflect.InvocationTargetException;
+ import java.lang.reflect.Method;
+ import java.lang.reflect.Modifier;
+ import java.util.Random;
++import java.util.StringJoiner;
+ import java.util.logging.Level;
+ 
++import static org.bukkit.Bukkit.getLogger;
++
+ public final class MatherionityConfig {
+ 
+-    public static final String CONFIG_HEADER = "Configuration file for Matherion.";
+-    public static final int CURRENT_CONFIG_VERSION = 1;
++    public static final String CONFIG_HEADER = new StringJoiner("\n")
++            .add("")
++            .add("Matherionity Configuration File")
++            .add("2021 (c) Mia")
++            .add("")
++            .add("")
++            .toString();
++
++    public static final int CURRENT_CONFIG_VERSION = 2;
+ 
+-    private static final Object[] EMPTY = new Object[0];
++    public static final String CONFIG_VERSION_KEY = "config-version-please-do-not-modify-me";
+ 
+     private static File configFile;
++
+     public static YamlConfiguration config;
++
+     private static int configVersion;
+-    public static boolean createWorldSections = true;
+-    public static void init(final File file) {
+-        // TODO remove this in the future...
+-        final File configFile = new File(file.getParent(), "matherionity.yml");
+-        MatherionityConfig.configFile = file;
+-        final YamlConfiguration config = new YamlConfiguration();
+-        config.options().header(CONFIG_HEADER);
+-        config.options().copyDefaults(true);
+-
+-        if (!file.exists()) {
+-            try {
+-                if (!file.createNewFile())
+-                    throw new Exception("File#createNewFile returns false."); // Matherion - yo what dangling bool?
+-            } catch (final Exception ex) {
+-                Bukkit.getLogger().log(Level.SEVERE, "Failure to create tuinity config", ex);
+-            }
+-        }
+ 
++    public static void init(final File file) {
++        getLogger().info("Initing lo");
++        System.out.println("Initing out");
+         try {
+-            config.load(file);
+-        } catch (final Exception ex) {
+-            Bukkit.getLogger().log(Level.SEVERE, "Failure to load matherionity config", ex);
++            load(new File(file.getParent(), "matherionity.yml"));
++        } catch (Exception ex) {
++            getLogger().log(Level.SEVERE, "Failure to load matherionity config", ex);
+         }
+-
+-        MatherionityConfig.load(config);
+     }
+ 
+-    public static void load(final YamlConfiguration config) {
+-        MatherionityConfig.config = config;
+-        MatherionityConfig.configVersion = MatherionityConfig.getInt("config-version-please-do-not-modify-me", CURRENT_CONFIG_VERSION);
+-        MatherionityConfig.set("config-version-please-do-not-modify-me", CURRENT_CONFIG_VERSION);
++    /**
++     * Loads the configuration. Checks the config version and assigns a value to all
++     * config properties in this class.
++     *
++     * @param file The config file
++     */
++    public static void load(File file) throws InvocationTargetException, IllegalAccessException, IOException, InvalidConfigurationException {
++        getLogger().info("Loading lo");
++        System.out.println("Loading out");
++        configFile = file;
++
++        if (!file.exists() && !file.createNewFile())
++                throw new RuntimeException("Failed to create the matherionity.yml configuration file.");
++
++        YamlConfiguration yamlConfig = new YamlConfiguration();
+ 
+-        for (final Method method : MatherionityConfig.class.getDeclaredMethods()) {
+-            if (method.getReturnType() != void.class || method.getParameterCount() != 0 ||
+-                    !Modifier.isPrivate(method.getModifiers()) || !Modifier.isStatic(method.getModifiers())) {
+-                continue;
++        yamlConfig.options().header(CONFIG_HEADER);
++        yamlConfig.options().copyDefaults(true);
++
++        yamlConfig.load(configFile);
++
++        config = yamlConfig;
++
++        // Config version
++        configVersion = getInt(CONFIG_VERSION_KEY, CURRENT_CONFIG_VERSION);
++        set(CONFIG_VERSION_KEY, CURRENT_CONFIG_VERSION);
++
++        // If the config version does not match, backup the old file and create a new one.
++        if (configVersion != CURRENT_CONFIG_VERSION) {
++            if (!configFile.renameTo(new File(file.getParent(), "matherionity.yml.old-" + configVersion))) {
++                throw new RuntimeException("Failed to backup the old matherionity.yml.");
+             }
+ 
+-            try {
+-                method.setAccessible(true);
+-                method.invoke(null, EMPTY);
+-                method.setAccessible(false);
+-            } catch (final Exception ex) {
+-                SneakyThrow.sneaky(ex); /* Rethrow, this is critical */
+-                throw new RuntimeException(ex); // unreachable
++            configFile = new File(configFile.getParent(), "matherionity.yml");
++            if (!configFile.createNewFile()) {
++                throw new RuntimeException("Failed to create the matherionity.yml configuration file.");
+             }
++
++            yamlConfig.load(configFile);
++        }
++
++        // Invokes all `private static void ()` functions
++        // These are used to set values for variables in this class.
++        for (Method method : MatherionityConfig.class.getDeclaredMethods()) {
++            if (
++                    method.getReturnType() != void.class ||
++                            method.getParameterCount() != 0 ||
++                            !Modifier.isPrivate(method.getModifiers()) ||
++                            !Modifier.isStatic(method.getModifiers())
++            ) continue;
++
++            method.setAccessible(true);
++            method.invoke(null);
++            method.setAccessible(false);
+         }
+ 
+-        /* We re-save to add new options */
+         try {
+             config.save(MatherionityConfig.configFile);
+         } catch (final Exception ex) {
+-            Bukkit.getLogger().log(Level.SEVERE, "Unable to save matherionity config", ex);
++            getLogger().log(Level.SEVERE, "Unable to save matherionity config", ex);
+         }
+     }
+ 
+     static void set(final String path, final Object value) {
+-        MatherionityConfig.config.set(path, value);
++        config.set(path, value);
+     }
+ 
+     static boolean getBoolean(final String path, final boolean dfl) {
+-        MatherionityConfig.config.addDefault(path, Boolean.valueOf(dfl));
+-        return MatherionityConfig.config.getBoolean(path, dfl);
++        config.addDefault(path, dfl);
++        return config.getBoolean(path, dfl);
+     }
+ 
+     static int getInt(final String path, final int dfl) {
+-        MatherionityConfig.config.addDefault(path, Integer.valueOf(dfl));
+-        return MatherionityConfig.config.getInt(path, dfl);
++        config.addDefault(path, dfl);
++        return config.getInt(path, dfl);
+     }
+ 
+     static long getLong(final String path, final long dfl) {
+-        MatherionityConfig.config.addDefault(path, Long.valueOf(dfl));
+-        return MatherionityConfig.config.getLong(path, dfl);
++        config.addDefault(path, dfl);
++        return config.getLong(path, dfl);
+     }
+ 
+     static double getDouble(final String path, final double dfl) {
+-        MatherionityConfig.config.addDefault(path, Double.valueOf(dfl));
+-        return MatherionityConfig.config.getDouble(path, dfl);
++        config.addDefault(path, dfl);
++        return config.getDouble(path, dfl);
+     }
+ 
+     static String getString(final String path, final String dfl) {
+-        MatherionityConfig.config.addDefault(path, dfl);
+-        return MatherionityConfig.config.getString(path, dfl);
++        config.addDefault(path, dfl);
++        return config.getString(path, dfl);
+     }
+ 
++    /**
++     * The server name. It is used in Redis and the server's ServerState.
++     * Most of the times, it represents a group of servers, eg. TheBridge
++     */
++
+     public static String serverName;
+ 
+     private static void serverName() {
+-        serverName = MatherionityConfig.getString("serverName", "CHANGEMEPLSTHX");
++        serverName = getString("serverName", "CHANGEMEPLSTHX");
+     }
+ 
++    /**
++     * A unique identifier for the server.
++     */
++
+     public static int serverId;
+ 
+     private static void serverId() {
+-        serverId = MatherionityConfig.getInt("serverId", new Random().nextInt());
+-    }
+-
+-    public static boolean privateServer;
+-
+-    private static void privateServer() {
+-        privateServer = MatherionityConfig.getBoolean("privateServer", false);
+-    }
+-
+-    @Nullable
+-    public static TeamMode teamMode;
+-
+-    private static void teamMode() {
+-        String name = MatherionityConfig.getString("teamMode", null);
+-        teamMode = name != null ? TeamMode.valueOf(name) : null;
++        serverId = getInt("serverId", new Random().nextInt());
+     }
+ 
+     /**
+-     * Database JDBC URL
++     * Checks whether the server is private,
++     * meaning it should not be shown to normal players.
+      */
+ 
+-    public static String jdbcUrl;
++    public static boolean privateServer;
+ 
+-    private static void databaseJdbcUrl() {
+-        jdbcUrl = MatherionityConfig.getString("database.jdbcUrl", "jdbc:mysql://localhost:3306/matherionity");
++    private static void privateServer() {
++        privateServer = getBoolean("privateServer", false);
+     }
+ 
+     /**
+-     * Database Username
++     * If the server is for a game that has teams, it can be specified by adding
++     * `teamMode: TeamMode` to the config.
+      */
+ 
+-    public static String databaseUsername;
++    @Nullable
++    public static TeamMode teamMode;
+ 
+-    private static void databaseUsername() {
+-        databaseUsername = MatherionityConfig.getString("database.username", "root");
++    private static void teamMode() {
++        String name = getString("teamMode", null);
++        teamMode = name != null ? TeamMode.valueOf(name) : null;
+     }
+ 
+     /**
+-     * Database Password
++     * Database Settings
+      */
+ 
+-    public static String databasePassword;
++    public static ConfigurationSection database;
+ 
+-    private static void databasePassword() {
+-        databasePassword = MatherionityConfig.getString("database.password", "stylecraft");
++    private static void database() {
++        database = config.getConfigurationSection("database");
++        if (database == null) {
++            database = config.createSection("database", HikariConnection.defaultConfig);
++            try {
++                config.save(configFile);
++            } catch (IOException e) {
++                e.printStackTrace();
++            }
++        }
+     }
+ 
+     /**
+-     * Redis URL
++     * Redis Settings
+      */
+ 
+-    public static String redisUrl;
++    public static ConfigurationSection redis;
+ 
+-    private static void redisUrl() {
+-        redisUrl = MatherionityConfig.getString("redis.url", "redis://127.0.0.1:6379");
+-    }
+-
+-    /********************************/
+-    // Redis Password
+-    /********************************/
+-
+-    public static String redisPassword;
+-
+-    private static void redisPassword() {
+-        redisPassword = MatherionityConfig.getString("redis.password", "stylecraft");
++    private static void redis() {
++        redis = config.getConfigurationSection("redis");
++        if (redis == null) {
++            redis = config.createSection("redis", RedissonManager.defaultConfig);
++            try {
++                config.save(configFile);
++            } catch (IOException e) {
++                e.printStackTrace();
++            }
++        }
+     }
+ }
+\ No newline at end of file
+diff --git a/src/main/java/eu/matherion/server/database/impl/HikariConnection.java b/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
+index 12f3c033de54b93f56cc676279842130d75895f3..bf2fc7bc5eaf44c8dc1c09a8c15d736a229e76b8 100644
+--- a/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
++++ b/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
+@@ -3,10 +3,14 @@ package eu.matherion.server.database.impl;
+ import com.zaxxer.hikari.HikariConfig;
+ import com.zaxxer.hikari.HikariDataSource;
+ import eu.matherion.api.database.DatabaseConnection;
++import org.bukkit.configuration.ConfigurationSection;
+ import org.jetbrains.annotations.Nullable;
+ 
+ import java.sql.Connection;
+ import java.sql.SQLException;
++import java.util.AbstractMap;
++import java.util.Map;
++import java.util.function.Supplier;
+ 
+ public class HikariConnection implements DatabaseConnection<HikariDataSource> {
+ 
+@@ -14,10 +18,62 @@ public class HikariConnection implements DatabaseConnection<HikariDataSource> {
+ 
+     private HikariConfig config;
+ 
++    public static Map<String, ?> defaultConfig = Map.ofEntries(
++            new AbstractMap.SimpleEntry<>("connector", HikariConnection.class.getName()),
++            new AbstractMap.SimpleEntry<>("url", "jdbc:mysql://127.0.0.1:3306/database"),
++            new AbstractMap.SimpleEntry<>("username", "root"),
++            new AbstractMap.SimpleEntry<>("password", "matherionity"),
++            new AbstractMap.SimpleEntry<>("options.driver", "com.mysql.cj.jdbc.Driver"),
++            new AbstractMap.SimpleEntry<>("options.maximumPoolSize", 10),
++            new AbstractMap.SimpleEntry<>("options.minimumIdle", 2),
++            new AbstractMap.SimpleEntry<>("options.connectionTimeout", 30000),
++            new AbstractMap.SimpleEntry<>("options.maxLifetime", 1800000),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.cachePrepStmts", "true"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.prepStmtCacheSize", "250"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.prepStmtCacheSqlLimit", "2048"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.useServerPrepStmts", "true"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.useLocalSessionState", "true"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.rewriteBatchedStatements", "true"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.cacheResultSetMetadata", "true"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.cacheServerConfiguration", "true"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.elideSetAutoCommits", "true"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.maintainTimeStats", "false"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.alwaysSendSetIsolation", "false"),
++            new AbstractMap.SimpleEntry<>("options.hikariProperties.cacheCallableStmts", "true")
++    );
++
+     public HikariConnection(HikariConfig config) {
+         this.config = config;
+     }
+ 
++    public HikariConnection(ConfigurationSection config) {
++        this(createHikariConfigFromSection(config));
++    }
++
++    private static HikariConfig createHikariConfigFromSection(ConfigurationSection config) {
++        HikariConfig hc = new HikariConfig();
++
++        hc.setJdbcUrl(config.getString("url"));
++        hc.setUsername(config.getString("username"));
++        hc.setPassword(config.getString("password"));
++        hc.setDriverClassName(config.getString("options.driver"));
++
++        hc.setPoolName("MatherionityPool");
++
++        hc.setMaximumPoolSize(config.getInt("options.maximumPoolSize"));
++        hc.setMinimumIdle(config.getInt("options.minimumIdle"));
++        hc.setConnectionTimeout(config.getInt("options.connectionTimeout"));
++        hc.setMaxLifetime(config.getInt("options.maxLifetime"));
++
++        ConfigurationSection hikariProperties = config.getConfigurationSection("options.hikariProperties");
++
++        for (String key : hikariProperties.getKeys(false)) {
++            hc.addDataSourceProperty(key, hikariProperties.get(key));
++        }
++
++        return hc;
++    }
++
+     @Override
+     public HikariDataSource getDataSource() {
+         return dataSource;
+diff --git a/src/main/java/eu/matherion/server/redis/RedisManagerImpl.java b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+similarity index 59%
+rename from src/main/java/eu/matherion/server/redis/RedisManagerImpl.java
+rename to src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+index 1be85f5a2a024f60b35fa53c0e9cf54e774ea01b..72c93311015201a9b7a9912ebfcb41c30f7d5f54 100644
+--- a/src/main/java/eu/matherion/server/redis/RedisManagerImpl.java
++++ b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+@@ -1,54 +1,76 @@
+-package eu.matherion.server.redis;
++package eu.matherion.server.redis.impl;
+ 
+ import eu.matherion.api.ServerState;
+ import eu.matherion.api.redis.RedisManager;
++import org.bukkit.configuration.ConfigurationSection;
+ import org.redisson.Redisson;
+ import org.redisson.api.RMap;
+ import org.redisson.api.RedissonClient;
++import org.redisson.codec.JsonJacksonCodec;
+ import org.redisson.config.Config;
+ 
+ import java.io.File;
+ import java.io.IOException;
+ import java.io.InputStream;
+ import java.net.URL;
+-import java.util.Arrays;
++import java.util.AbstractMap;
+ import java.util.Map;
+ import java.util.concurrent.ExecutionException;
+ import java.util.concurrent.Future;
+ 
+-public class RedisManagerImpl implements RedisManager<RedissonClient> {
++public class RedissonManager implements RedisManager<RedissonClient> {
+ 
+     protected Config config;
+ 
+     private final RedissonClient client;
+ 
+-    public RedisManagerImpl(Config config) {
++    public static final Map<String, ?> defaultConfig = Map.ofEntries(
++            new AbstractMap.SimpleEntry<>("manager", RedissonManager.class.getName()),
++            new AbstractMap.SimpleEntry<>("url", "redis://127.0.0.1:6379"),
++            new AbstractMap.SimpleEntry<>("password", "matherionity")
++    );
++
++    public RedissonManager(Config config) {
+         this.config = config;
+         this.client = Redisson.create(config);
+-        this.client.getMap("");
++    }
++
++    public RedissonManager(ConfigurationSection section) {
++        this(createConfigFromSection(section));
++    }
++
++    private static Config createConfigFromSection(ConfigurationSection section) {
++        Config config = new Config();
++        config.setCodec(new JsonJacksonCodec());
++        config.useSingleServer()
++                .setAddress(section.getString("url"))
++                .setUsername(section.getString("username"))
++                .setPassword(section.getString("password"));
++
++        return config;
+     }
+ 
+     /**
+-     * @deprecated Use {@link RedisManagerImpl#RedisManagerImpl(Config)}
++     * @deprecated Use {@link RedissonManager#RedissonManager(Config)}
+      */
+     @Deprecated
+-    public RedisManagerImpl(File configFile) throws IOException {
++    public RedissonManager(File configFile) throws IOException {
+         this(Config.fromYAML(configFile));
+     }
+ 
+     /**
+-     * @deprecated Use {@link RedisManagerImpl#RedisManagerImpl(Config)}
++     * @deprecated Use {@link RedissonManager#RedissonManager(Config)}
+      */
+     @Deprecated
+-    public RedisManagerImpl(URL configUrl) throws IOException {
++    public RedissonManager(URL configUrl) throws IOException {
+         this(Config.fromYAML(configUrl));
+     }
+ 
+     /**
+-     * @deprecated Use {@link RedisManagerImpl#RedisManagerImpl(Config)}
++     * @deprecated Use {@link RedissonManager#RedissonManager(Config)}
+      */
+     @Deprecated
+-    public RedisManagerImpl(InputStream configStream) throws IOException {
++    public RedissonManager(InputStream configStream) throws IOException {
+         this(Config.fromYAML(configStream));
+     }
+ 
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index 2b5780c9a95c3a7caae7656b7aa81197fccbc8f4..66b83f8e3885379e8c5190eed88b3d5382f81ca0 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -12,8 +12,6 @@ import com.mojang.brigadier.tree.CommandNode;
+ import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.serialization.DynamicOps;
+ import com.mojang.serialization.Lifecycle;
+-import com.zaxxer.hikari.HikariConfig;
+-import com.zaxxer.hikari.HikariDataSource;
+ import eu.matherion.api.ServerState;
+ import eu.matherion.api.StateType;
+ import eu.matherion.api.database.DatabaseConnection;
+@@ -21,8 +19,6 @@ import eu.matherion.api.database.DatabaseManager;
+ import eu.matherion.api.redis.RedisManager;
+ import eu.matherion.server.config.MatherionityConfig;
+ import eu.matherion.server.database.DatabaseManagerImpl;
+-import eu.matherion.server.database.impl.HikariConnection;
+-import eu.matherion.server.redis.RedisManagerImpl;
+ import io.netty.buffer.ByteBuf;
+ import io.netty.buffer.ByteBufOutputStream;
+ import io.netty.buffer.Unpooled;
+@@ -148,8 +144,6 @@ import org.bukkit.scheduler.BukkitWorker;
+ import org.bukkit.util.StringUtil;
+ import org.bukkit.util.permissions.DefaultPermissions;
+ import org.redisson.api.RedissonClient;
+-import org.redisson.codec.JsonJacksonCodec;
+-import org.redisson.config.Config;
+ import org.yaml.snakeyaml.Yaml;
+ import org.yaml.snakeyaml.constructor.SafeConstructor;
+ import org.yaml.snakeyaml.error.MarkedYAMLException;
+@@ -960,34 +954,20 @@ public final class CraftServer implements Server {
+         if (this.databaseManager != null)
+             unloadDatabase();
+ 
+-        HikariConfig hc = new HikariConfig();
+-
+-        hc.setDriverClassName("com.mysql.cj.jdbc.Driver");
+-
+-        hc.setJdbcUrl(MatherionityConfig.jdbcUrl);
+-        hc.setUsername(MatherionityConfig.databaseUsername);
+-        hc.setPassword(MatherionityConfig.databasePassword);
+-
+-        hc.setMaximumPoolSize(10);
+-        hc.setMinimumIdle(2);
+-        hc.setPoolName("MatherionityPool");
+-        hc.setConnectionTimeout(30000);
+-        hc.setMaxLifetime(1800000);
++        DatabaseConnection conn = null;
++        try {
++            Class<?> connectionClass = Class.forName(MatherionityConfig.database.getString("connector"));
+ 
+-        hc.addDataSourceProperty("cachePrepStmts", "true");
+-        hc.addDataSourceProperty("prepStmtCacheSize", "250");
+-        hc.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+-        hc.addDataSourceProperty("useServerPrepStmts", "true");
+-        hc.addDataSourceProperty("useLocalSessionState", "true");
+-        hc.addDataSourceProperty("rewriteBatchedStatements", "true");
+-        hc.addDataSourceProperty("cacheResultSetMetadata", "true");
+-        hc.addDataSourceProperty("cacheServerConfiguration", "true");
+-        hc.addDataSourceProperty("elideSetAutoCommits", "true");
+-        hc.addDataSourceProperty("maintainTimeStats", "false");
+-        hc.addDataSourceProperty("alwaysSendSetIsolation", "false");
+-        hc.addDataSourceProperty("cacheCallableStmts", "true");
++            if (!DatabaseConnection.class.isAssignableFrom(connectionClass)) {
++                throw new Exception("Class must implement " + DatabaseConnection.class.getName());
++            }
+ 
+-        DatabaseConnection<HikariDataSource> conn = new HikariConnection(hc);
++            conn = (DatabaseConnection) connectionClass.getConstructor(ConfigurationSection.class).newInstance(MatherionityConfig.database);
++        } catch (Exception e) {
++            getLogger().severe("[DB] Failed to load DatabaseConnection");
++            e.printStackTrace();
++            shutdown();
++        }
+ 
+         getLogger().info("[DB] Connecting to the database...");
+ 
+@@ -1005,16 +985,25 @@ public final class CraftServer implements Server {
+         if (redisManager != null)
+             unloadRedis();
+ 
+-        getLogger().info("[Redis] Connecting to Redis...");
++        RedisManager manager = null;
++        try {
++            Class<?> managerClass = Class.forName(MatherionityConfig.redis.getString("manager"));
++
++            if (!RedisManager.class.isAssignableFrom(managerClass)) {
++                throw new Exception("Class must implement " + RedisManager.class.getName());
++            }
++
++            manager = (RedisManager) managerClass.getConstructor(ConfigurationSection.class).newInstance(MatherionityConfig.redis);
++        } catch (Exception e) {
++            getLogger().severe("[Redis] Failed to load RedisManager");
++            e.printStackTrace();
++            shutdown();
++        }
+ 
+-        Config config = new Config();
+-        config.setCodec(new JsonJacksonCodec());
+-        config.useSingleServer()
+-                .setAddress(MatherionityConfig.redisUrl)
+-                .setPassword(MatherionityConfig.redisPassword);
++        getLogger().info("[Redis] Connecting to Redis...");
+ 
+-        this.redisManager = new RedisManagerImpl(config);
+-        this.redisManager.setServerState(getFullServerName(), getServerState());
++        this.redisManager = manager;
++        setServerState(getServerState());
+     }
+ 
+     private String getFullServerName() {

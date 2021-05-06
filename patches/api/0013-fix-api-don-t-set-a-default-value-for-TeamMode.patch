@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Thu, 6 May 2021 22:07:03 +0200
+Subject: [PATCH] fix(api): don't set a default value for TeamMode
+
+
+diff --git a/src/main/java/eu/matherion/api/ServerState.java b/src/main/java/eu/matherion/api/ServerState.java
+index e9356b9f1463b49b49a5371f2b0bb0b7e511be81..6ea36040e5650429e8671fed3947ac639e0e5d39 100644
+--- a/src/main/java/eu/matherion/api/ServerState.java
++++ b/src/main/java/eu/matherion/api/ServerState.java
+@@ -11,7 +11,7 @@ public class ServerState implements Serializable {
+     String name = "";
+ 
+     @Nullable
+-    TeamMode teamMode = TeamMode.TWO;
++    TeamMode teamMode;
+ 
+     StateType stateType = StateType.WAITING;
+ 
