@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Thu, 6 May 2021 13:23:44 +0200
+Subject: [PATCH] feat: add Plugin annotationm
+
+
+diff --git a/src/main/java/eu/matherion/api/plugin/annotations/Plugin.java b/src/main/java/eu/matherion/api/plugin/annotations/Plugin.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab3d19e5fe8334ea654832c4dfbbf55a07b43ef7
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/plugin/annotations/Plugin.java
+@@ -0,0 +1,54 @@
++package eu.matherion.api.plugin.annotations;
++
++import java.lang.annotation.ElementType;
++import java.lang.annotation.Retention;
++import java.lang.annotation.RetentionPolicy;
++import java.lang.annotation.Target;
++
++@Retention(RetentionPolicy.RUNTIME)
++@Target(ElementType.TYPE)
++public @interface Plugin {
++
++    /**
++     * The unique identifier for a Matherionity plugin.
++     * Should match [a-Z0-9-_] and must be max 64 characters long.
++     *
++     * @return the ID for this plugin
++     */
++    String id();
++
++    /**
++     * The display name for the plugin. If empty, it returns the unique identifier.
++     *
++     * @return The plugin name
++     */
++    String name() default "";
++
++    /**
++     * The version of the plugin.
++     *
++     * @return the version of the plugin
++     */
++    String version() default "";
++
++    /**
++     * A simple description of what the plugin does.
++     *
++     * @return The plugin description
++     */
++    String description() default "";
++
++    /**
++     * The URL or website of the plugin.
++     *
++     * @return The plugin url, or an empty string if unknown
++     */
++    String url() default "";
++
++    /**
++     * The author/s of the plugin.
++     *
++     * @return the plugin's author/s
++     */
++    String[] authors() default "";
++}
+\ No newline at end of file
