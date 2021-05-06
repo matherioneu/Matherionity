@@ -1,0 +1,128 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Thu, 6 May 2021 14:01:59 +0200
+Subject: [PATCH] fix(server): correctly update ServerState
+
+
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index 0b5cf23932c3c626d8805d4db97d2bbab63634cf..32b5863ccc8905160d85a4e4db7798e4c95a384b 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -302,8 +302,8 @@ public abstract class PlayerList {
+         }).thenAccept(chunk -> {
+             playerconnection.playerJoinReady = () -> {
+                 postChunkLoadJoin(
+-                    entityplayer, finalWorldserver, networkmanager, playerconnection,
+-                    nbttagcompound, networkmanager.getSocketAddress().toString(), lastKnownName
++                        entityplayer, finalWorldserver, networkmanager, playerconnection,
++                        nbttagcompound, networkmanager.getSocketAddress().toString(), lastKnownName
+                 );
+             };
+         });
+@@ -356,6 +356,10 @@ public abstract class PlayerList {
+         PlayerJoinEvent playerJoinEvent = new org.bukkit.event.player.PlayerJoinEvent(cserver.getPlayer(entityplayer), PaperAdventure.asAdventure(chatmessage)); // Paper - Adventure
+         cserver.getPluginManager().callEvent(playerJoinEvent);
+ 
++        // Matherion start
++        updateServerState();
++        // Matherion end
++
+         if (!entityplayer.playerConnection.networkManager.isConnected()) {
+             return;
+         }
+@@ -417,6 +421,14 @@ public abstract class PlayerList {
+         // Paper start - move vehicle into method so it can be called above - short circuit around that code
+         onPlayerJoinFinish(entityplayer, worldserver1, s1);
+     }
++
++    // Matherion start
++    public void updateServerState() {
++        cserver.getServerState().setOnline(getPlayerCount());
++        cserver.getServerState().setMax(getMaxPlayers());
++    }
++    // Matherion end
++
+     private void mountSavedVehicle(EntityPlayer entityplayer, WorldServer worldserver1, NBTTagCompound nbttagcompound) {
+         // Paper end
+         if (nbttagcompound != null && nbttagcompound.hasKeyOfType("RootVehicle", 10)) {
+@@ -598,6 +610,10 @@ public abstract class PlayerList {
+         if (entityplayer.didPlayerJoinEvent) cserver.getPluginManager().callEvent(playerQuitEvent); // Paper - if we disconnected before join ever fired, don't fire quit
+         entityplayer.getBukkitEntity().disconnect(playerQuitEvent.getQuitMessage());
+ 
++        // Matherion start
++        updateServerState();
++        // Matherion end
++
+         if (server.isMainThread()) entityplayer.playerTick(); // SPIGOT-924 // Paper - don't tick during emergency shutdowns (Watchdog)
+         // CraftBukkit end
+ 
+@@ -975,7 +991,7 @@ public abstract class PlayerList {
+             IBlockData data = worldserver1.getType(blockposition);
+             worldserver1.setTypeAndData(blockposition, data.set(BlockRespawnAnchor.a, data.get(BlockRespawnAnchor.a) - 1), 3);
+             entityplayer1.playerConnection.sendPacket(new PacketPlayOutNamedSoundEffect(SoundEffects.BLOCK_RESPAWN_ANCHOR_DEPLETE, SoundCategory.BLOCKS, (double) location.getX(), (double) location.getY(), (double) location.getZ(), 1.0F, 1.0F));
+-        // Paper end
++            // Paper end
+         }
+         // Added from changeDimension
+         updateClient(entityplayer); // Update health, etc...
+@@ -1169,8 +1185,8 @@ public abstract class PlayerList {
+         }
+ 
+         if (recalculatePermissions) { // Paper
+-        entityplayer.getBukkitEntity().recalculatePermissions(); // CraftBukkit
+-        this.server.getCommandDispatcher().a(entityplayer);
++            entityplayer.getBukkitEntity().recalculatePermissions(); // CraftBukkit
++            this.server.getCommandDispatcher().a(entityplayer);
+         } // Paper
+     }
+ 
+@@ -1233,7 +1249,7 @@ public abstract class PlayerList {
+ 
+             // CraftBukkit start - Test if player receiving packet can see the source of the packet
+             //if (entityhuman != null && entityhuman instanceof EntityPlayer && !entityplayer.getBukkitEntity().canSee(((EntityPlayer) entityhuman).getBukkitEntity())) { // Paper
+-               //continue; // Paper
++            //continue; // Paper
+             //} // Paper
+             // CraftBukkit end
+ 
+@@ -1256,19 +1272,19 @@ public abstract class PlayerList {
+     }
+     public void savePlayers(Integer interval) {
+         MCUtil.ensureMain("Save Players" , () -> { // Paper - Ensure main
+-        MinecraftTimings.savePlayers.startTiming(); // Paper
+-        int numSaved = 0;
+-        long now = MinecraftServer.currentTick;
+-        for (int i = 0; i < this.players.size(); ++i) {
+-            EntityPlayer entityplayer = this.players.get(i);
+-            if (interval == null || now - entityplayer.lastSave >= interval) {
+-                this.savePlayerFile(entityplayer);
+-                if (interval != null && ++numSaved <= com.destroystokyo.paper.PaperConfig.maxPlayerAutoSavePerTick) { break; }
++            MinecraftTimings.savePlayers.startTiming(); // Paper
++            int numSaved = 0;
++            long now = MinecraftServer.currentTick;
++            for (int i = 0; i < this.players.size(); ++i) {
++                EntityPlayer entityplayer = this.players.get(i);
++                if (interval == null || now - entityplayer.lastSave >= interval) {
++                    this.savePlayerFile(entityplayer);
++                    if (interval != null && ++numSaved <= com.destroystokyo.paper.PaperConfig.maxPlayerAutoSavePerTick) { break; }
++                }
++                // Paper end
+             }
+-            // Paper end
+-        }
+-        MinecraftTimings.savePlayers.stopTiming(); // Paper
+-        return null; }); // Paper - ensure main
++            MinecraftTimings.savePlayers.stopTiming(); // Paper
++            return null; }); // Paper - ensure main
+     }
+ 
+     public WhiteList getWhitelist() {
+@@ -1383,7 +1399,7 @@ public abstract class PlayerList {
+         // CraftBukkit start - disconnect safely
+         for (EntityPlayer player : this.players) {
+             if (isRestarting) player.playerConnection.disconnect(org.spigotmc.SpigotConfig.restartMessage); else // Paper
+-            player.playerConnection.disconnect(PaperAdventure.asVanilla(this.server.server.shutdownMessage())); // CraftBukkit - add custom shutdown message // Paper - Adventure
++                player.playerConnection.disconnect(PaperAdventure.asVanilla(this.server.server.shutdownMessage())); // CraftBukkit - add custom shutdown message // Paper - Adventure
+         }
+         // CraftBukkit end
+ 
