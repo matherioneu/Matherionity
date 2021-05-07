@@ -1,3 +1,22 @@
-include:
-  template: Jobs/Code-Quality.gitlab-ci.yml
+image: adoptopenjdk/openjdk11:alpine
 
+stages:
+  - build
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+before_script:
+  # Install all required dependencies
+  - apk --no-cache add maven git patch bash curl
+  # Setup Git
+  - git config --global user.name "Friendly Matherionity CI"
+  - git config --global user.email "ci@git.matherion.dev"
+
+maven-build:
+  stage: build
+  script: "./tuinity jar"
+  artifacts:
+    paths:
+      - Tuinity-Server/target/*.jar
+      - Tuinity-API/target/*.jar
