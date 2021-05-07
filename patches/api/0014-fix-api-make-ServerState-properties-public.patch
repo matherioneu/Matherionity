@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 7 May 2021 02:17:38 +0200
+Subject: [PATCH] fix(api): make ServerState properties public
+
+
+diff --git a/src/main/java/eu/matherion/api/ServerState.java b/src/main/java/eu/matherion/api/ServerState.java
+index 6ea36040e5650429e8671fed3947ac639e0e5d39..290aec32c585a105ccb2da56833d79e8d48a2d5b 100644
+--- a/src/main/java/eu/matherion/api/ServerState.java
++++ b/src/main/java/eu/matherion/api/ServerState.java
+@@ -1,25 +1,25 @@
+ package eu.matherion.api;
+ 
+-import org.jetbrains.annotations.Nullable;
++import org.checkerframework.checker.nullness.qual.Nullable;
+ 
+ import java.io.Serializable;
+ 
+ public class ServerState implements Serializable {
+ 
+-    int id = 0;
++    public int id = 0;
+ 
+-    String name = "";
++    public String name = "";
+ 
+     @Nullable
+-    TeamMode teamMode;
++    public TeamMode teamMode;
+ 
+-    StateType stateType = StateType.WAITING;
++    public StateType stateType = StateType.WAITING;
+ 
+-    boolean privateServer = false;
++    public boolean privateServer = false;
+ 
+-    int online = 0;
++    public int online = 0;
+ 
+-    int max = 0;
++    public int max = 0;
+ 
+     public ServerState() {
+     }

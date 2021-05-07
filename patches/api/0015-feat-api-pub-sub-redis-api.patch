@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 7 May 2021 02:27:38 +0200
+Subject: [PATCH] feat(api): pub/sub redis api
+
+
+diff --git a/src/main/java/eu/matherion/api/ServerStateUpdate.java b/src/main/java/eu/matherion/api/ServerStateUpdate.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..983a5b11f9f596777b766080ba37c830af97dbd2
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/ServerStateUpdate.java
+@@ -0,0 +1,21 @@
++package eu.matherion.api;
++
++public class ServerStateUpdate {
++
++    private final String serverName;
++
++    private final ServerState serverState;
++
++    public ServerStateUpdate(String serverName, ServerState serverState) {
++        this.serverName = serverName;
++        this.serverState = serverState;
++    }
++
++    public String getServerName() {
++        return serverName;
++    }
++
++    public ServerState getServerState() {
++        return serverState;
++    }
++}
+diff --git a/src/main/java/eu/matherion/api/redis/RedisManager.java b/src/main/java/eu/matherion/api/redis/RedisManager.java
+index ef6a4d75d4fd678dd58df99ac51f336ddf4b82ca..912f395685da94fe85c06c31ca1a3e292471980f 100644
+--- a/src/main/java/eu/matherion/api/redis/RedisManager.java
++++ b/src/main/java/eu/matherion/api/redis/RedisManager.java
+@@ -1,6 +1,8 @@
+ package eu.matherion.api.redis;
+ 
+ import eu.matherion.api.ServerState;
++import eu.matherion.api.ServerStateUpdate;
++import org.bukkit.util.Consumer;
+ 
+ import java.util.Map;
+ import java.util.concurrent.ExecutionException;
+@@ -20,4 +22,5 @@ public interface RedisManager<T> {
+ 
+      Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException;
+ 
++    void subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer);
+ }

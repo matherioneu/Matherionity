@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 7 May 2021 02:28:09 +0200
+Subject: [PATCH] feat(server): pub/sub for redis state change
+
+
+diff --git a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+index 413e07bfefa87f314ae59aa51f216e0101622519..a8086182a52a08790ddf0ba96b297558ef1e551d 100644
+--- a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
++++ b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+@@ -1,10 +1,13 @@
+ package eu.matherion.server.redis.impl;
+ 
+ import eu.matherion.api.ServerState;
++import eu.matherion.api.ServerStateUpdate;
+ import eu.matherion.api.redis.RedisManager;
+ import org.bukkit.configuration.ConfigurationSection;
++import org.bukkit.util.Consumer;
+ import org.redisson.Redisson;
+ import org.redisson.api.RMap;
++import org.redisson.api.RTopic;
+ import org.redisson.api.RedissonClient;
+ import org.redisson.codec.JsonJacksonCodec;
+ import org.redisson.config.Config;
+@@ -89,14 +92,7 @@ public class RedissonManager implements RedisManager<RedissonClient> {
+         RMap<String, ServerState> servers = getServers();
+         servers.fastPut(server, serverState);
+ 
+-        System.out.println("loggin servers");
+-        System.out.println(getServers());
+-        getServers().forEach((s, serverState1) -> {
+-            System.out.println();
+-            System.out.println(s);
+-            System.out.println(serverState1.toString());
+-            System.out.println();
+-        });
++        client.getTopic("serverStateUpdates").publish(new ServerStateUpdate(server, serverState));
+     }
+ 
+     @Override
+@@ -133,4 +129,13 @@ public class RedissonManager implements RedisManager<RedissonClient> {
+         */
+     }
+ 
+-}
++    @Override
++    public void subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer) {
++        RTopic topic = client.getTopic("serverStateUpdates");
++        topic.addListener(
++                ServerStateUpdate.class,
++                (charSequence, serverStateUpdate) ->
++                        serverStateConsumer.accept(serverStateUpdate)
++        );
++    }
++}
+\ No newline at end of file

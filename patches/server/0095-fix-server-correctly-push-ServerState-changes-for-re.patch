@@ -1,0 +1,131 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 7 May 2021 02:14:51 +0200
+Subject: [PATCH] fix(server): correctly push ServerState changes (for real)
+
+
+diff --git a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+index 72c93311015201a9b7a9912ebfcb41c30f7d5f54..413e07bfefa87f314ae59aa51f216e0101622519 100644
+--- a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
++++ b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+@@ -88,6 +88,15 @@ public class RedissonManager implements RedisManager<RedissonClient> {
+     public void setServerState(String server, ServerState serverState) {
+         RMap<String, ServerState> servers = getServers();
+         servers.fastPut(server, serverState);
++
++        System.out.println("loggin servers");
++        System.out.println(getServers());
++        getServers().forEach((s, serverState1) -> {
++            System.out.println();
++            System.out.println(s);
++            System.out.println(serverState1.toString());
++            System.out.println();
++        });
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 358f4f98a6d61d146777a93a67bc04ad54aa911a..c399400245c4e9e1370c1dc32238caf97590e02c 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -1074,6 +1074,11 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+                 // anything at 3+ won't be caught here but also will trip watchdog....
+                 // tasks are default scheduled at -1 + delay, and first tick will tick at 1
+                 String doneTime = String.format(java.util.Locale.ROOT, "%.3fs", (double) (SystemUtils.getMonotonicNanos() - serverStartTime) / 1.0E9D);
++
++                // Matherion start
++                playerList.updateServerState();
++                // Matherione end
++
+                 LOGGER.info("Done ({})! For help, type \"help\"", doneTime);
+                 // Paper end
+ 
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index 32b5863ccc8905160d85a4e4db7798e4c95a384b..52b0ba6d699e253cd6ec23affd479e25cd0a3fd8 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -426,6 +426,7 @@ public abstract class PlayerList {
+     public void updateServerState() {
+         cserver.getServerState().setOnline(getPlayerCount());
+         cserver.getServerState().setMax(getMaxPlayers());
++        cserver.pushServerState();
+     }
+     // Matherion end
+ 
+@@ -610,9 +611,6 @@ public abstract class PlayerList {
+         if (entityplayer.didPlayerJoinEvent) cserver.getPluginManager().callEvent(playerQuitEvent); // Paper - if we disconnected before join ever fired, don't fire quit
+         entityplayer.getBukkitEntity().disconnect(playerQuitEvent.getQuitMessage());
+ 
+-        // Matherion start
+-        updateServerState();
+-        // Matherion end
+ 
+         if (server.isMainThread()) entityplayer.playerTick(); // SPIGOT-924 // Paper - don't tick during emergency shutdowns (Watchdog)
+         // CraftBukkit end
+@@ -705,6 +703,10 @@ public abstract class PlayerList {
+         cserver.getScoreboardManager().removePlayer(entityplayer.getBukkitEntity());
+         // CraftBukkit end
+ 
++        // Matherion start
++        updateServerState();
++        // Matherion end
++
+         return entityplayer.didPlayerJoinEvent ? playerQuitEvent.quitMessage() : null; // CraftBukkit // Paper - Adventure // Paper - don't print quit if we never printed join
+     }
+ 
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index 66b83f8e3885379e8c5190eed88b3d5382f81ca0..dd68f3e538aa38070034839f7140f86e02ee92b3 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -203,7 +203,7 @@ public final class CraftServer implements Server {
+     // Matherion start
+     private DatabaseManager databaseManager;
+     private RedisManager<RedissonClient> redisManager;
+-    public ServerState serverState = createServerState();
++    public ServerState serverState;
+ 
+     public ServerState createServerState() {
+         return new ServerState(
+@@ -212,8 +212,8 @@ public final class CraftServer implements Server {
+                 MatherionityConfig.teamMode,
+                 StateType.WAITING,
+                 MatherionityConfig.privateServer,
+-                0,
+-                0
++                playerList.getPlayerCount(),
++                playerList.getMaxPlayers()
+         );
+     }
+     // Matherion end
+@@ -230,9 +230,6 @@ public final class CraftServer implements Server {
+         this.playerView = Collections.unmodifiableList(Lists.transform(playerList.players, EntityPlayer::getBukkitEntity)); // Matherion - rewrote to lambda reference
+         this.serverVersion = CraftServer.class.getPackage().getImplementationVersion();
+ 
+-        this.serverState.setOnline(playerList.getPlayerCount());
+-        this.serverState.setMax(playerList.getMaxPlayers());
+-
+         Bukkit.setServer(this);
+ 
+         // Register all the Enchantments and PotionTypes now so we can stop new registration immediately after
+@@ -1002,8 +999,9 @@ public final class CraftServer implements Server {
+ 
+         getLogger().info("[Redis] Connecting to Redis...");
+ 
++        this.serverState = createServerState();
+         this.redisManager = manager;
+-        setServerState(getServerState());
++        pushServerState();
+     }
+ 
+     private String getFullServerName() {
+@@ -1014,6 +1012,10 @@ public final class CraftServer implements Server {
+         this.serverState = serverState;
+         this.redisManager.setServerState(getFullServerName(), serverState);
+     }
++
++    public void pushServerState() {
++        setServerState(getServerState());
++    }
+     // Matherion end
+ 
+     // Paper start
