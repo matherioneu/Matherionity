@@ -1,4 +1,4 @@
-image: adoptopenjdk/openjdk11:alpine
+image: adoptopenjdk/openjdk11:ubuntu
 
 stages:
   - build
@@ -8,7 +8,7 @@ variables:
 
 before_script:
   # Install all required dependencies
-  - apk --no-cache add maven git patch bash curl
+  - apt install maven git patch bash curl -y
   # Setup Git
   - git config --global user.name "Friendly Matherionity CI"
   - git config --global user.email "ci@git.matherion.dev"
