@@ -1,0 +1,74 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 7 May 2021 12:57:41 +0200
+Subject: [PATCH] feat(api): ability to cancel ServerUpdate sub
+
+
+diff --git a/src/main/java/eu/matherion/api/ServerStateUpdate.java b/src/main/java/eu/matherion/api/ServerStateUpdate.java
+index 983a5b11f9f596777b766080ba37c830af97dbd2..1874b89f353797cc023b34fba79a20b3172fb34d 100644
+--- a/src/main/java/eu/matherion/api/ServerStateUpdate.java
++++ b/src/main/java/eu/matherion/api/ServerStateUpdate.java
+@@ -1,12 +1,15 @@
+ package eu.matherion.api;
+ 
++import org.checkerframework.checker.nullness.qual.Nullable;
++
+ public class ServerStateUpdate {
+ 
+     private final String serverName;
+ 
++    @Nullable
+     private final ServerState serverState;
+ 
+-    public ServerStateUpdate(String serverName, ServerState serverState) {
++    public ServerStateUpdate(String serverName, @Nullable ServerState serverState) {
+         this.serverName = serverName;
+         this.serverState = serverState;
+     }
+@@ -15,6 +18,7 @@ public class ServerStateUpdate {
+         return serverName;
+     }
+ 
++    @Nullable
+     public ServerState getServerState() {
+         return serverState;
+     }
+diff --git a/src/main/java/eu/matherion/api/redis/RedisManager.java b/src/main/java/eu/matherion/api/redis/RedisManager.java
+index 912f395685da94fe85c06c31ca1a3e292471980f..ea865bbcc4af32a2063c889098ec3750f6f21fc3 100644
+--- a/src/main/java/eu/matherion/api/redis/RedisManager.java
++++ b/src/main/java/eu/matherion/api/redis/RedisManager.java
+@@ -10,17 +10,29 @@ import java.util.concurrent.Future;
+ 
+ public interface RedisManager<T> {
+ 
+-     T getClient();
++    T getClient();
+ 
+-     Map<String, ServerState> getServers();
++    Map<String, ServerState> getServers();
+ 
+     void removeServer(String server);
+ 
++    /**
++     * @deprecated |
++     * Async functions are currently not supported.
++     * Implementations should throw {@link java.lang.UnsupportedOperationException}.
++     */
++    @Deprecated(since = "1.0.0")
+     Future<Map<String, ServerState>> getServersAsync();
+ 
+-     void setServerState(String server, ServerState serverState);
++    void setServerState(String server, ServerState serverState);
+ 
+-     Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException;
++    /**
++     * @deprecated Refer to {@link RedisManager#getServersAsync()}
++     */
++    @Deprecated(since = "1.0.0")
++    Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException;
+ 
+-    void subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer);
++    int subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer);
++
++    void cancelServerUpdateSubscription(int subscriptionId);
+ }

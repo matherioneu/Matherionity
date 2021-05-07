@@ -1,0 +1,124 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 7 May 2021 12:57:54 +0200
+Subject: [PATCH] feat(server): ability to cancel ServerUpdate sub
+
+
+diff --git a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+index a8086182a52a08790ddf0ba96b297558ef1e551d..2d5f448b73dae3867e8903ac154fe7967b4a2912 100644
+--- a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
++++ b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+@@ -12,10 +12,6 @@ import org.redisson.api.RedissonClient;
+ import org.redisson.codec.JsonJacksonCodec;
+ import org.redisson.config.Config;
+ 
+-import java.io.File;
+-import java.io.IOException;
+-import java.io.InputStream;
+-import java.net.URL;
+ import java.util.AbstractMap;
+ import java.util.Map;
+ import java.util.concurrent.ExecutionException;
+@@ -53,30 +49,6 @@ public class RedissonManager implements RedisManager<RedissonClient> {
+         return config;
+     }
+ 
+-    /**
+-     * @deprecated Use {@link RedissonManager#RedissonManager(Config)}
+-     */
+-    @Deprecated
+-    public RedissonManager(File configFile) throws IOException {
+-        this(Config.fromYAML(configFile));
+-    }
+-
+-    /**
+-     * @deprecated Use {@link RedissonManager#RedissonManager(Config)}
+-     */
+-    @Deprecated
+-    public RedissonManager(URL configUrl) throws IOException {
+-        this(Config.fromYAML(configUrl));
+-    }
+-
+-    /**
+-     * @deprecated Use {@link RedissonManager#RedissonManager(Config)}
+-     */
+-    @Deprecated
+-    public RedissonManager(InputStream configStream) throws IOException {
+-        this(Config.fromYAML(configStream));
+-    }
+-
+     @Override
+     public RedissonClient getClient() {
+         return this.client;
+@@ -92,7 +64,7 @@ public class RedissonManager implements RedisManager<RedissonClient> {
+         RMap<String, ServerState> servers = getServers();
+         servers.fastPut(server, serverState);
+ 
+-        client.getTopic("serverStateUpdates").publish(new ServerStateUpdate(server, serverState));
++        getServerStateUpdateTopic().publish(new ServerStateUpdate(server, serverState));
+     }
+ 
+     @Override
+@@ -101,41 +73,33 @@ public class RedissonManager implements RedisManager<RedissonClient> {
+         servers.fastRemove(server);
+     }
+ 
+-    /**
+-     * TODO: to be implemented
+-     *
+-     * @deprecated This function is not implemented.
+-     */
+     @Override
+-    @Deprecated
+-    public Future<Map<String, ServerState>> getServersAsync() {
+-        throw new UnsupportedOperationException("Not implemented yet.");
+-        // return client.getBuckets().getAsync("servers");
++    public int subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer) {
++        return getServerStateUpdateTopic().addListener(
++                ServerStateUpdate.class,
++                (charSequence, serverStateUpdate) ->
++                        serverStateConsumer.accept(serverStateUpdate)
++        );
++    }
++
++    @Override
++    public void cancelServerUpdateSubscription(int subscriptionId) {
++        getServerStateUpdateTopic().removeListener(subscriptionId);
++    }
++
++    public RTopic getServerStateUpdateTopic() {
++        return client.getTopic("serverStateUpdates");
+     }
+ 
+-    /**
+-     * TODO: to be implemented
+-     *
+-     * @deprecated This function is not implemented.
+-     */
+     @Override
+     @Deprecated
+-    public Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException {
+-        throw new UnsupportedOperationException("Not implemented yet.");
+-        /*
+-            Map<String, ServerState> states = getServersAsync().get();
+-            states.put(server, serverState);
+-            return client.getBuckets().setAsync(states);
+-        */
++    public Future<Map<String, ServerState>> getServersAsync() {
++        throw new UnsupportedOperationException();
+     }
+ 
+     @Override
+-    public void subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer) {
+-        RTopic topic = client.getTopic("serverStateUpdates");
+-        topic.addListener(
+-                ServerStateUpdate.class,
+-                (charSequence, serverStateUpdate) ->
+-                        serverStateConsumer.accept(serverStateUpdate)
+-        );
++    @Deprecated
++    public Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException {
++        throw new UnsupportedOperationException();
+     }
+ }
+\ No newline at end of file
