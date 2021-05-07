@@ -8,6 +8,7 @@ variables:
 
 before_script:
   # Install all required dependencies
+  - apt update
   - apt install maven git patch bash curl -y
   # Setup Git
   - git config --global user.name "Friendly Matherionity CI"
