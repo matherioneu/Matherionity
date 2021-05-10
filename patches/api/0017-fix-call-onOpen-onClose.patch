@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 10 May 2021 19:18:49 +0200
+Subject: [PATCH] fix: call onOpen, onClose
+
+
+diff --git a/src/main/java/eu/matherion/api/menu/AbstractMenu.java b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+index 29842a24d4f372bcda87b5b25def7b0e13713a93..3b189fb2e7f9ed29d09621ea40a156395948d0c1 100644
+--- a/src/main/java/eu/matherion/api/menu/AbstractMenu.java
++++ b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+@@ -194,6 +194,8 @@ public abstract class AbstractMenu implements Listener, WindowResponse {
+         if (e.getView().getTopInventory().equals(getBukkitInventory())) {
+             if (windowResponse != null)
+                 windowResponse.onOpen(e);
++
++            this.onOpen(e);
+         }
+     }
+ 
+@@ -203,6 +205,8 @@ public abstract class AbstractMenu implements Listener, WindowResponse {
+             if (windowResponse != null)
+                 windowResponse.onClose(e);
+ 
++            this.onClose(e);
++
+             Bukkit.getScheduler().runTaskLater(null, () ->
+                     ((Player) e.getPlayer()).updateInventory(), 5);
+             // I need to update the inventory because minecraft is weird
