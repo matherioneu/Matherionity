@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 10 May 2021 18:41:23 +0200
+Subject: [PATCH] fix(server): closing redis and nulling serverstate before
+ pushing final state
+
+
+diff --git a/src/main/java/eu/matherion/server/config/MatherionityConfig.java b/src/main/java/eu/matherion/server/config/MatherionityConfig.java
+index a34ffc0f3dc13b74a2ae6a92cb399428410ea0d5..2d1b6e96f0cd45fbd73c1f25efb68a840e0f959a 100644
+--- a/src/main/java/eu/matherion/server/config/MatherionityConfig.java
++++ b/src/main/java/eu/matherion/server/config/MatherionityConfig.java
+@@ -40,8 +40,6 @@ public final class MatherionityConfig {
+     private static int configVersion;
+ 
+     public static void init(final File file) {
+-        getLogger().info("Initing lo");
+-        System.out.println("Initing out");
+         try {
+             load(new File(file.getParent(), "matherionity.yml"));
+         } catch (Exception ex) {
+@@ -56,8 +54,6 @@ public final class MatherionityConfig {
+      * @param file The config file
+      */
+     public static void load(File file) throws InvocationTargetException, IllegalAccessException, IOException, InvalidConfigurationException {
+-        getLogger().info("Loading lo");
+-        System.out.println("Loading out");
+         configFile = file;
+ 
+         if (!file.exists() && !file.createNewFile())
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index c399400245c4e9e1370c1dc32238caf97590e02c..7941a8a3ba892fb254b1cf0f6e99b0b9dc352999 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -977,8 +977,6 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+     public void safeShutdown(boolean flag) {
+         // Matherion start
+         server.unloadDatabase();
+-        server.unloadRedis();
+-        server.serverState = null;
+         // Matherion end
+         this.safeShutdown(flag, false);
+     }
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index 52b0ba6d699e253cd6ec23affd479e25cd0a3fd8..9d5f912ee802060eb86ea93f4b853b6172df9ba7 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -1412,6 +1412,11 @@ public abstract class PlayerList {
+             if (team != null) scoreboard.removeTeam(team);
+         }
+         // Paper end
++
++        // Matherion start
++        updateServerState();
++        cserver.unloadRedis();
++        // Matherion end
+     }
+     // Paper end
+ 
