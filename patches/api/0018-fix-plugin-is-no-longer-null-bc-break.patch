@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 10 May 2021 19:22:08 +0200
+Subject: [PATCH] fix: plugin is no longer null [bc break]
+
+
+diff --git a/src/main/java/eu/matherion/api/menu/AbstractMenu.java b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+index 3b189fb2e7f9ed29d09621ea40a156395948d0c1..19519f5f1f5ae2bf5cd95fe62d193743aa07adb4 100644
+--- a/src/main/java/eu/matherion/api/menu/AbstractMenu.java
++++ b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+@@ -16,12 +16,13 @@ import org.bukkit.event.inventory.InventoryDragEvent;
+ import org.bukkit.event.inventory.InventoryOpenEvent;
+ import org.bukkit.inventory.Inventory;
+ import org.bukkit.inventory.ItemStack;
++import org.bukkit.plugin.Plugin;
+ 
+ import java.util.*;
+ 
+ public abstract class AbstractMenu implements Listener, WindowResponse {
+ 
+-    private final int id;
++    private final UUID id;
+ 
+     private final List<FinalItemJob> jobs = new ArrayList<>();
+     private final Map<Integer, WindowElement> elements = new HashMap<>();
+@@ -29,15 +30,20 @@ public abstract class AbstractMenu implements Listener, WindowResponse {
+     private Window gui;
+     private WindowResponse windowResponse;
+ 
+-    public AbstractMenu(Window gui) {
++    private Plugin plugin;
++
++    public AbstractMenu(Window gui, Plugin plugin) {
+         this.gui = gui;
+-        this.id = 0000; // fixme: fix
++        this.plugin = plugin;
++
++        this.id = UUID.randomUUID(); // fixme: fix
+ 
+         this.guiSettings = new GUISettings();
+         this.guiSettings.setCanEnterItems(false);
+         this.guiSettings.setCanDrag(false);
+ 
+-        Bukkit.getPluginManager().registerEvents(this, null);
++
++        Bukkit.getPluginManager().registerEvents(this, this.plugin);
+     }
+ 
+     public void setGUI(Window gui) {
+@@ -207,7 +213,7 @@ public abstract class AbstractMenu implements Listener, WindowResponse {
+ 
+             this.onClose(e);
+ 
+-            Bukkit.getScheduler().runTaskLater(null, () ->
++            Bukkit.getScheduler().runTaskLater(plugin, () ->
+                     ((Player) e.getPlayer()).updateInventory(), 5);
+             // I need to update the inventory because minecraft is weird
+             // otherwise you can make the item to.. "stay" in your inventory until you do something with it
