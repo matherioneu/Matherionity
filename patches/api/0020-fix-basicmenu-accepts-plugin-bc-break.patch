@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 10 May 2021 20:29:14 +0200
+Subject: [PATCH] fix: basicmenu accepts plugin [bc break]
+
+
+diff --git a/src/main/java/eu/matherion/api/menu/impl/BasicMenu.java b/src/main/java/eu/matherion/api/menu/impl/BasicMenu.java
+index ed3398c737da9398f8232065b514c16b90be84f0..2cbd31045ab6ac41febbaf5ff52a6ed42a311285 100644
+--- a/src/main/java/eu/matherion/api/menu/impl/BasicMenu.java
++++ b/src/main/java/eu/matherion/api/menu/impl/BasicMenu.java
+@@ -2,9 +2,10 @@ package eu.matherion.api.menu.impl;
+ 
+ import eu.matherion.api.menu.AbstractMenu;
+ import eu.matherion.api.menu.Window;
++import org.bukkit.plugin.Plugin;
+ 
+ public class BasicMenu extends AbstractMenu {
+-    public BasicMenu(Window window) {
+-        super(window);
++    public BasicMenu(Window window, Plugin plugin) {
++        super(window, plugin);
+     }
+ }
