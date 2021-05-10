@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 10 May 2021 20:15:41 +0200
+Subject: [PATCH] fix: my stupidity... oh wait that cant be fixed
+
+
+diff --git a/src/main/java/eu/matherion/api/menu/AbstractMenu.java b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+index 19519f5f1f5ae2bf5cd95fe62d193743aa07adb4..e81bead0d96647a7b31d9d3dd5efca18186d7448 100644
+--- a/src/main/java/eu/matherion/api/menu/AbstractMenu.java
++++ b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+@@ -352,7 +352,7 @@ public abstract class AbstractMenu implements Listener, WindowResponse {
+ 
+     }
+ 
+-    public int getId() {
++    public UUID getId() {
+         return id;
+     }
+ 
