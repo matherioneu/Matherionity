@@ -1,0 +1,380 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 12 May 2021 02:58:10 +0200
+Subject: [PATCH] feat: pubsub config, get rid of redis
+
+
+diff --git a/src/main/java/eu/matherion/server/ayaka/Ayaka.java b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+index e1250c9d3172a7cd0dcd3f6c94bdfc2728744ece..03b4576ff5df88114f90eed4804b613ca31c81cf 100644
+--- a/src/main/java/eu/matherion/server/ayaka/Ayaka.java
++++ b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+@@ -8,8 +8,11 @@ import eu.matherion.api.servers.pubsub.message.Action;
+ import eu.matherion.api.servers.pubsub.subscriber.ServerStateUpdateSubscriber;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+ 
++import java.io.IOException;
+ import java.net.URI;
++import java.util.AbstractMap;
+ import java.util.List;
++import java.util.Map;
+ 
+ public class Ayaka implements ServerPubSub {
+ 
+@@ -17,6 +20,11 @@ public class Ayaka implements ServerPubSub {
+ 
+   private List<ServerStateUpdateSubscriber> stateUpdateSubscribers = Lists.newArrayList();
+ 
++  public static final Map<String, ?> defaultConfig = Map.ofEntries(
++    new AbstractMap.SimpleEntry<>("connector", Ayaka.class.getName()),
++    new AbstractMap.SimpleEntry<>("url", "ws://127.0.0.1:4200")
++  );
++
+   public Ayaka(String instanceUrl) throws Exception {
+     if (!instanceUrl.startsWith("ws"))
+       throw new Exception("Instance URL needs to start with ws:// or wss://");
+@@ -61,4 +69,13 @@ public class Ayaka implements ServerPubSub {
+   public <T> void sendAction(String action, T data) {
+     getClient().sendMessage(new Action<>(action, data));
+   }
++
++  @Override
++  public void close() {
++    try {
++      getClient().getSession().close();
++    } catch (IOException e) {
++      e.printStackTrace();
++    }
++  }
+ }
+diff --git a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+index 329a4563a416c4087ecf18014b59a3266658c963..25053c8a3edc12a917d0e0adfa3c10dc84864484 100644
+--- a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
++++ b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+@@ -59,4 +59,8 @@ public class AyakaWebSocketClient {
+   public void setAyakaMessageHandler(AyakaMessageHandler ayakaMessageHandler) {
+     this.ayakaMessageHandler = ayakaMessageHandler;
+   }
++
++  public Session getSession() {
++    return session;
++  }
+ }
+diff --git a/src/main/java/eu/matherion/server/config/MatherionityConfig.java b/src/main/java/eu/matherion/server/config/MatherionityConfig.java
+index 2d1b6e96f0cd45fbd73c1f25efb68a840e0f959a..b1f75a128a0771a40fe6d99bfb54834ce5a8e568 100644
+--- a/src/main/java/eu/matherion/server/config/MatherionityConfig.java
++++ b/src/main/java/eu/matherion/server/config/MatherionityConfig.java
+@@ -1,8 +1,8 @@
+ package eu.matherion.server.config;
+ 
+ import eu.matherion.api.TeamMode;
++import eu.matherion.server.ayaka.Ayaka;
+ import eu.matherion.server.database.impl.HikariConnection;
+-import eu.matherion.server.redis.impl.RedissonManager;
+ import org.bukkit.configuration.ConfigurationSection;
+ import org.bukkit.configuration.InvalidConfigurationException;
+ import org.bukkit.configuration.file.YamlConfiguration;
+@@ -138,7 +138,7 @@ public final class MatherionityConfig {
+     }
+ 
+     /**
+-     * The server name. It is used in Redis and the server's ServerState.
++     * The server name. It is used in the server's ServerState.
+      * Most of the times, it represents a group of servers, eg. TheBridge
+      */
+ 
+@@ -201,15 +201,15 @@ public final class MatherionityConfig {
+     }
+ 
+     /**
+-     * Redis Settings
++     * ServerPubSub Settings
+      */
+ 
+-    public static ConfigurationSection redis;
++    public static ConfigurationSection pubSub;
+ 
+-    private static void redis() {
+-        redis = config.getConfigurationSection("redis");
+-        if (redis == null) {
+-            redis = config.createSection("redis", RedissonManager.defaultConfig);
++    private static void pubSub() {
++        pubSub = config.getConfigurationSection("pubsub");
++        if (pubSub == null) {
++            pubSub = config.createSection("pubsub", Ayaka.defaultConfig);
+             try {
+                 config.save(configFile);
+             } catch (IOException e) {
+diff --git a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+deleted file mode 100644
+index d8953ae8f313269a477aa625bd12bff6df9cbd2c..0000000000000000000000000000000000000000
+--- a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
++++ /dev/null
+@@ -1,112 +0,0 @@
+-package eu.matherion.server.redis.impl;
+-
+-import eu.matherion.api.servers.ServerState;
+-import eu.matherion.api.servers.ServerStateUpdate;
+-import eu.matherion.api.redis.RedisManager;
+-import org.bukkit.configuration.ConfigurationSection;
+-import org.bukkit.util.Consumer;
+-import org.redisson.Redisson;
+-import org.redisson.api.RMap;
+-import org.redisson.api.RTopic;
+-import org.redisson.api.RedissonClient;
+-import org.redisson.codec.JsonJacksonCodec;
+-import org.redisson.config.Config;
+-
+-import java.util.AbstractMap;
+-import java.util.Map;
+-import java.util.concurrent.ExecutionException;
+-import java.util.concurrent.Future;
+-
+-public class RedissonManager implements RedisManager<RedissonClient> {
+-
+-    protected Config config;
+-
+-    private final RedissonClient client;
+-
+-    public static final Map<String, ?> defaultConfig = Map.ofEntries(
+-            new AbstractMap.SimpleEntry<>("manager", RedissonManager.class.getName()),
+-            new AbstractMap.SimpleEntry<>("url", "redis://127.0.0.1:6379"),
+-            new AbstractMap.SimpleEntry<>("password", "matherionity")
+-    );
+-
+-    public RedissonManager(Config config) {
+-        this.config = config;
+-        this.client = Redisson.create(config);
+-    }
+-
+-    public RedissonManager(ConfigurationSection section) {
+-        this(createConfigFromSection(section));
+-    }
+-
+-    private static Config createConfigFromSection(ConfigurationSection section) {
+-        Config config = new Config();
+-        config.setCodec(new JsonJacksonCodec());
+-        config.useSingleServer()
+-                .setAddress(section.getString("url"))
+-                .setUsername(section.getString("username"))
+-                .setPassword(section.getString("password"));
+-
+-        return config;
+-    }
+-
+-    @Override
+-    public RedissonClient getClient() {
+-        return this.client;
+-    }
+-
+-    @Override
+-    public RMap<String, ServerState> getServers() {
+-        return client.getMap("servers");
+-    }
+-
+-    @Override
+-    public void setServerState(String server, ServerState serverState) {
+-        RMap<String, ServerState> servers = getServers();
+-
+-        if (serverState == null) removeServer(server);
+-        else servers.fastPut(server, serverState);
+-
+-        getServerStateUpdateTopic().publish(new ServerStateUpdate(server, serverState));
+-    }
+-
+-    @Override
+-    public void removeServer(String server) {
+-        RMap<String, ServerState> servers = getServers();
+-        servers.fastRemove(server);
+-    }
+-
+-    @Override
+-    public int subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer) {
+-        return getServerStateUpdateTopic().addListener(
+-                ServerStateUpdate.class,
+-                (charSequence, serverStateUpdate) ->
+-                        serverStateConsumer.accept(serverStateUpdate)
+-        );
+-    }
+-
+-    @Override
+-    public void publishServerUpdate(ServerStateUpdate update) {
+-        getServerStateUpdateTopic().publish(update);
+-    }
+-
+-    @Override
+-    public void cancelServerUpdateSubscription(int subscriptionId) {
+-        getServerStateUpdateTopic().removeListener(subscriptionId);
+-    }
+-
+-    public RTopic getServerStateUpdateTopic() {
+-        return client.getTopic("serverStateUpdates");
+-    }
+-
+-    @Override
+-    @Deprecated
+-    public Future<Map<String, ServerState>> getServersAsync() {
+-        throw new UnsupportedOperationException();
+-    }
+-
+-    @Override
+-    @Deprecated
+-    public Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException {
+-        throw new UnsupportedOperationException();
+-    }
+-}
+\ No newline at end of file
+diff --git a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+index bc5d048bb99c4899f9d58718b17fbc18659aae52..c9452656ea462f7067c7e8bd1b5708778f404cb6 100644
+--- a/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
++++ b/src/main/java/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -256,7 +256,7 @@ public class DedicatedServer extends MinecraftServer implements IMinecraftServer
+ 
+         // Matherion start
+         server.loadDatabase();
+-        server.loadRedis();
++        server.loadPubSub();
+         server.createGuice();
+         // Matherion end
+ 
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index 8117174a96dfc588b96d2043beb876c8c7de4449..62727c8913f587f630fa8372c1e5a05d74dde0fd 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -1414,7 +1414,7 @@ public abstract class PlayerList {
+ 
+         // Matherion start
+         updateServerState();
+-        cserver.unloadRedis();
++        cserver.unloadPubSub();
+         // Matherion end
+     }
+     // Paper end
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index d415469135d3bf0dd11280c1f56a373a30957ca6..74f947926fa7e86d8c6ac0435604adbd34c274ab 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -12,11 +12,11 @@ import com.mojang.brigadier.tree.CommandNode;
+ import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.serialization.DynamicOps;
+ import com.mojang.serialization.Lifecycle;
+-import eu.matherion.api.servers.ServerState;
+ import eu.matherion.api.StateType;
+ import eu.matherion.api.database.DatabaseConnection;
+ import eu.matherion.api.database.DatabaseManager;
+-import eu.matherion.api.redis.RedisManager;
++import eu.matherion.api.servers.ServerState;
++import eu.matherion.api.servers.pubsub.ServerPubSub;
+ import eu.matherion.server.config.MatherionityConfig;
+ import eu.matherion.server.database.DatabaseManagerImpl;
+ import io.netty.buffer.ByteBuf;
+@@ -143,7 +143,6 @@ import org.bukkit.potion.PotionEffectType;
+ import org.bukkit.scheduler.BukkitWorker;
+ import org.bukkit.util.StringUtil;
+ import org.bukkit.util.permissions.DefaultPermissions;
+-import org.redisson.api.RedissonClient;
+ import org.yaml.snakeyaml.Yaml;
+ import org.yaml.snakeyaml.constructor.SafeConstructor;
+ import org.yaml.snakeyaml.error.MarkedYAMLException;
+@@ -202,7 +201,7 @@ public final class CraftServer implements Server {
+ 
+     // Matherion start
+     private DatabaseManager databaseManager;
+-    private RedisManager<RedissonClient> redisManager;
++    private ServerPubSub pubSub;
+     public ServerState serverState;
+ 
+     public ServerState createServerState() {
+@@ -872,7 +871,6 @@ public final class CraftServer implements Server {
+ 
+         // Matherion start
+         unloadDatabase();
+-        unloadRedis();
+ 
+         serverState = null;
+         // Matherion end
+@@ -921,7 +919,6 @@ public final class CraftServer implements Server {
+ 
+         // Matherion start
+         serverState = createServerState();
+-        loadRedis();
+         loadDatabase();
+         // Matherion end
+ 
+@@ -940,13 +937,6 @@ public final class CraftServer implements Server {
+         databaseManager = null;
+     }
+ 
+-    public void unloadRedis() {
+-        getLogger().info("[DB] Closing connection to Redis.");
+-        getRedisManager().removeServer(getFullServerName());
+-        getRedisManager().getClient().shutdown();
+-        redisManager = null;
+-    }
+-
+     public void loadDatabase() {
+         if (this.databaseManager != null)
+             unloadDatabase();
+@@ -978,30 +968,28 @@ public final class CraftServer implements Server {
+         }
+     }
+ 
+-    public void loadRedis() {
+-        if (redisManager != null)
+-            unloadRedis();
++    public void loadPubSub() {
++        if (pubSub != null)
++            unloadPubSub();
+ 
+-        RedisManager manager = null;
++        ServerPubSub pubSub = null;
+         try {
+-            Class<?> managerClass = Class.forName(MatherionityConfig.redis.getString("manager"));
++            Class<?> managerClass = Class.forName(MatherionityConfig.pubSub.getString("connector"));
+ 
+-            if (!RedisManager.class.isAssignableFrom(managerClass)) {
+-                throw new Exception("Class must implement " + RedisManager.class.getName());
++            if (!ServerPubSub.class.isAssignableFrom(managerClass)) {
++                throw new Exception("Class must implement " + ServerPubSub.class.getName());
+             }
+ 
+-            manager = (RedisManager) managerClass.getConstructor(ConfigurationSection.class).newInstance(MatherionityConfig.redis);
++            pubSub = (ServerPubSub) managerClass.getConstructor(ConfigurationSection.class).newInstance(MatherionityConfig.pubSub);
+         } catch (Exception e) {
+-            getLogger().severe("[Redis] Failed to load RedisManager");
++            getLogger().severe("[PubSub] Failed to load ServerPubSub");
+             e.printStackTrace();
+             shutdown();
+         }
++    }
+ 
+-        getLogger().info("[Redis] Connecting to Redis...");
+-
+-        this.serverState = createServerState();
+-        this.redisManager = manager;
+-        pushServerState();
++    public void unloadPubSub() {
++        pubSub.close();
+     }
+ 
+     private String getFullServerName() {
+@@ -1010,7 +998,7 @@ public final class CraftServer implements Server {
+ 
+     public void setServerState(ServerState serverState) {
+         this.serverState = serverState;
+-        this.redisManager.setServerState(getFullServerName(), serverState);
++        this.pubSub.updateServerState(getFullServerName(), serverState);
+     }
+ 
+     public void pushServerState() {
+@@ -1665,9 +1653,8 @@ public final class CraftServer implements Server {
+     }
+ 
+     @Override
+-    public @Nullable
+-    RedisManager<RedissonClient> getRedisManager() {
+-        return this.redisManager;
++    public @Nullable ServerPubSub getPubSub() {
++        return pubSub;
+     }
+ 
+     @Override

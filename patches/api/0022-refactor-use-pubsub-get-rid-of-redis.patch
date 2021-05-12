@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 12 May 2021 02:58:29 +0200
+Subject: [PATCH] refactor: use pubsub, get rid of redis
+
+
+diff --git a/src/main/java/eu/matherion/api/redis/RedisManager.java b/src/main/java/eu/matherion/api/redis/RedisManager.java
+deleted file mode 100644
+index 29d49b3d0bec7ba13cf0f94b536c6374346542c1..0000000000000000000000000000000000000000
+--- a/src/main/java/eu/matherion/api/redis/RedisManager.java
++++ /dev/null
+@@ -1,40 +0,0 @@
+-package eu.matherion.api.redis;
+-
+-import eu.matherion.api.servers.ServerState;
+-import eu.matherion.api.servers.ServerStateUpdate;
+-import org.bukkit.util.Consumer;
+-
+-import java.util.Map;
+-import java.util.concurrent.ExecutionException;
+-import java.util.concurrent.Future;
+-
+-public interface RedisManager<T> {
+-
+-    T getClient();
+-
+-    Map<String, ServerState> getServers();
+-
+-    void removeServer(String server);
+-
+-    /**
+-     * @deprecated |
+-     * Async functions are currently not supported.
+-     * Implementations should throw {@link java.lang.UnsupportedOperationException}.
+-     */
+-    @Deprecated(since = "1.0.0")
+-    Future<Map<String, ServerState>> getServersAsync();
+-
+-    void setServerState(String server, ServerState serverState);
+-
+-    /**
+-     * @deprecated Refer to {@link RedisManager#getServersAsync()}
+-     */
+-    @Deprecated(since = "1.0.0")
+-    Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException;
+-
+-    int subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer);
+-
+-    void publishServerUpdate(ServerStateUpdate update);
+-
+-    void cancelServerUpdateSubscription(int subscriptionId);
+-}
+diff --git a/src/main/java/eu/matherion/api/servers/pubsub/ServerPubSub.java b/src/main/java/eu/matherion/api/servers/pubsub/ServerPubSub.java
+index b678d20305bac8969a8ba93fab0f1e9c5fd8527f..f825531696b820acabe4ed15a828ff6b49ea6dce 100644
+--- a/src/main/java/eu/matherion/api/servers/pubsub/ServerPubSub.java
++++ b/src/main/java/eu/matherion/api/servers/pubsub/ServerPubSub.java
+@@ -14,4 +14,6 @@ public interface ServerPubSub {
+   void removeServerStateUpdateSubscriber(ServerStateUpdateSubscriber subscriber);
+ 
+   <T> void sendAction(String action, T data);
++
++  void close();
+ }
+diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
+index 7789fbd91f82d87055e5714f62ba57c0739ecad7..ea4e332f2dc0850991a45ca2e31150dc70da633f 100644
+--- a/src/main/java/org/bukkit/Server.java
++++ b/src/main/java/org/bukkit/Server.java
+@@ -16,7 +16,7 @@ import java.util.logging.Logger;
+ 
+ import eu.matherion.api.servers.ServerState;
+ import eu.matherion.api.database.DatabaseManager;
+-import eu.matherion.api.redis.RedisManager;
++import eu.matherion.api.servers.pubsub.ServerPubSub;
+ import org.bukkit.Warning.WarningState;
+ import org.bukkit.advancement.Advancement;
+ import org.bukkit.block.data.BlockData;
+@@ -486,12 +486,12 @@ public interface Server extends PluginMessageRecipient, net.kyori.adventure.audi
+     public DatabaseManager getDatabaseManager();
+ 
+     /**
+-     * Gets the redis manager for interacting with Redis.
++     * Gets the PubSub for interacting with the Server PubSub Service.
+      *
+-     * @return a redis manager for this Server instance
++     * @return a ServerPubSub instance
+      */
+     @Nullable
+-    public RedisManager getRedisManager();
++    public ServerPubSub getPubSub();
+ 
+     /**
+      * Gets the redis manager for interacting with Redis.
