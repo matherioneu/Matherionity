@@ -1,7 +1,7 @@
 package eu.matherion.plugin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import eu.matherion.api.ServerState;
+import eu.matherion.api.servers.ServerState;
 import eu.matherion.api.StateType;
 
 import java.io.IOException;

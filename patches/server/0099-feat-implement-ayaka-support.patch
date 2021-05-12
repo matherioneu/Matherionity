@@ -1,0 +1,244 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 12 May 2021 02:38:00 +0200
+Subject: [PATCH] feat: implement ayaka support
+
+
+diff --git a/pom.xml b/pom.xml
+index b973ac28281bd821109249d8007bbfd70b309f37..ac814ae01491e2ef415a0ce44af81c861fdcbcf0 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -45,6 +45,19 @@
+             <version>4.0.3</version>
+         </dependency>
+ 
++        <!-- how ya like em sockets -->
++        <dependency>
++            <groupId>javax.websocket</groupId>
++            <artifactId>javax.websocket-api</artifactId>
++            <version>1.1</version>
++        </dependency>
++        <dependency>
++            <groupId>com.google.code.gson</groupId>
++            <artifactId>gson</artifactId>
++            <version>2.8.0</version>
++        </dependency>
++
++
+         <!-- because hikari -->
+         <dependency>
+             <groupId>org.slf4j</groupId>
+diff --git a/src/main/java/eu/matherion/server/ayaka/Ayaka.java b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e1250c9d3172a7cd0dcd3f6c94bdfc2728744ece
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+@@ -0,0 +1,64 @@
++package eu.matherion.server.ayaka;
++
++import com.google.common.collect.Lists;
++import eu.matherion.api.servers.pubsub.ServerPubSub;
++import eu.matherion.api.servers.ServerState;
++import eu.matherion.api.servers.ServerStateUpdate;
++import eu.matherion.api.servers.pubsub.message.Action;
++import eu.matherion.api.servers.pubsub.subscriber.ServerStateUpdateSubscriber;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++import java.net.URI;
++import java.util.List;
++
++public class Ayaka implements ServerPubSub {
++
++  private AyakaWebSocketClient client;
++
++  private List<ServerStateUpdateSubscriber> stateUpdateSubscribers = Lists.newArrayList();
++
++  public Ayaka(String instanceUrl) throws Exception {
++    if (!instanceUrl.startsWith("ws"))
++      throw new Exception("Instance URL needs to start with ws:// or wss://");
++
++    this.client = new AyakaWebSocketClient(URI.create(instanceUrl));
++    setupClient();
++  }
++
++  private void setupClient() {
++    this.client.setAyakaMessageHandler((action, data) -> {
++      if (action.equals("stateUpdate")) {
++        stateUpdateSubscribers.forEach((subscriber -> subscriber.accept((ServerStateUpdate) data)));
++      }
++    });
++  }
++
++  public AyakaWebSocketClient getClient() {
++    return client;
++  }
++
++  @Override
++  public void updateServerState(String serverName, @Nullable ServerState serverState) {
++    sendAction("stateUpdate", new ServerStateUpdate(serverName, serverState));
++  }
++
++  @Override
++  public void addServerStateUpdateSubscribers(ServerStateUpdateSubscriber... subscribers) {
++    stateUpdateSubscribers.addAll(Lists.newArrayList(subscribers));
++  }
++
++  @Override
++  public void addServerStateUpdateSubscriber(ServerStateUpdateSubscriber subscriber) {
++    stateUpdateSubscribers.add(subscriber);
++  }
++
++  @Override
++  public void removeServerStateUpdateSubscriber(ServerStateUpdateSubscriber subscriber) {
++    stateUpdateSubscribers.remove(subscriber);
++  }
++
++  @Override
++  public <T> void sendAction(String action, T data) {
++    getClient().sendMessage(new Action<>(action, data));
++  }
++}
+diff --git a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..329a4563a416c4087ecf18014b59a3266658c963
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+@@ -0,0 +1,62 @@
++package eu.matherion.server.ayaka;
++
++import com.google.gson.Gson;
++import eu.matherion.server.ayaka.handler.AyakaMessageHandler;
++import eu.matherion.api.servers.pubsub.message.Action;
++import org.bukkit.Bukkit;
++
++import javax.websocket.*;
++import java.net.URI;
++
++@ClientEndpoint
++public class AyakaWebSocketClient {
++
++  private Session session = null;
++
++  private URI uri;
++
++  private Gson gson = new Gson();
++
++  private AyakaMessageHandler ayakaMessageHandler = null;
++
++  public AyakaWebSocketClient(URI uri) {
++    this.uri = uri;
++  }
++
++  public void connect() {
++    try {
++      WebSocketContainer container = ContainerProvider.getWebSocketContainer();
++      container.connectToServer(this, this.uri);
++    } catch (Exception e) {
++      throw new RuntimeException(e);
++    }
++  }
++
++  @OnOpen
++  public void onOpen(Session session) {
++    Bukkit.getLogger().info("[Ayaka] Connected to WebSocket @ " + this.uri.toString());
++    this.session = session;
++  }
++
++  @OnMessage
++  public void onMessage(String message) {
++    Action<Object> action = (Action<Object>) gson.fromJson(message, Action.class);
++
++   if (ayakaMessageHandler != null)
++     ayakaMessageHandler.accept(action.action, action.data);
++  }
++
++  @OnClose
++  public void onClose() {
++    Bukkit.getLogger().warning("[Ayaka] Connection to WebSocket closed.");
++    // TODO: reconnect, otheriwse shutdown
++  }
++
++  public void sendMessage(Object message) {
++    this.session.getAsyncRemote().sendText(gson.toJson(message));
++  }
++
++  public void setAyakaMessageHandler(AyakaMessageHandler ayakaMessageHandler) {
++    this.ayakaMessageHandler = ayakaMessageHandler;
++  }
++}
+diff --git a/src/main/java/eu/matherion/server/ayaka/handler/AyakaMessageHandler.java b/src/main/java/eu/matherion/server/ayaka/handler/AyakaMessageHandler.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..05b890f1f6f34338e8052330866677ea07d326cc
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/ayaka/handler/AyakaMessageHandler.java
+@@ -0,0 +1,6 @@
++package eu.matherion.server.ayaka.handler;
++
++import java.util.function.BiConsumer;
++
++public interface AyakaMessageHandler extends BiConsumer<String, Object> {
++}
+diff --git a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+index 2d5f448b73dae3867e8903ac154fe7967b4a2912..d8953ae8f313269a477aa625bd12bff6df9cbd2c 100644
+--- a/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
++++ b/src/main/java/eu/matherion/server/redis/impl/RedissonManager.java
+@@ -1,7 +1,7 @@
+ package eu.matherion.server.redis.impl;
+ 
+-import eu.matherion.api.ServerState;
+-import eu.matherion.api.ServerStateUpdate;
++import eu.matherion.api.servers.ServerState;
++import eu.matherion.api.servers.ServerStateUpdate;
+ import eu.matherion.api.redis.RedisManager;
+ import org.bukkit.configuration.ConfigurationSection;
+ import org.bukkit.util.Consumer;
+@@ -62,7 +62,9 @@ public class RedissonManager implements RedisManager<RedissonClient> {
+     @Override
+     public void setServerState(String server, ServerState serverState) {
+         RMap<String, ServerState> servers = getServers();
+-        servers.fastPut(server, serverState);
++
++        if (serverState == null) removeServer(server);
++        else servers.fastPut(server, serverState);
+ 
+         getServerStateUpdateTopic().publish(new ServerStateUpdate(server, serverState));
+     }
+@@ -82,6 +84,11 @@ public class RedissonManager implements RedisManager<RedissonClient> {
+         );
+     }
+ 
++    @Override
++    public void publishServerUpdate(ServerStateUpdate update) {
++        getServerStateUpdateTopic().publish(update);
++    }
++
+     @Override
+     public void cancelServerUpdateSubscription(int subscriptionId) {
+         getServerStateUpdateTopic().removeListener(subscriptionId);
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index 9d5f912ee802060eb86ea93f4b853b6172df9ba7..8117174a96dfc588b96d2043beb876c8c7de4449 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -424,8 +424,7 @@ public abstract class PlayerList {
+ 
+     // Matherion start
+     public void updateServerState() {
+-        cserver.getServerState().setOnline(getPlayerCount());
+-        cserver.getServerState().setMax(getMaxPlayers());
++        cserver.setServerState(null);
+         cserver.pushServerState();
+     }
+     // Matherion end
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index dd68f3e538aa38070034839f7140f86e02ee92b3..d415469135d3bf0dd11280c1f56a373a30957ca6 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -12,7 +12,7 @@ import com.mojang.brigadier.tree.CommandNode;
+ import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.serialization.DynamicOps;
+ import com.mojang.serialization.Lifecycle;
+-import eu.matherion.api.ServerState;
++import eu.matherion.api.servers.ServerState;
+ import eu.matherion.api.StateType;
+ import eu.matherion.api.database.DatabaseConnection;
+ import eu.matherion.api.database.DatabaseManager;

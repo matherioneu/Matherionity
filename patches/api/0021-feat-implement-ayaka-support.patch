@@ -1,0 +1,177 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Wed, 12 May 2021 02:38:09 +0200
+Subject: [PATCH] feat: implement ayaka support
+
+
+diff --git a/src/main/java/eu/matherion/api/redis/RedisManager.java b/src/main/java/eu/matherion/api/redis/RedisManager.java
+index ea865bbcc4af32a2063c889098ec3750f6f21fc3..29d49b3d0bec7ba13cf0f94b536c6374346542c1 100644
+--- a/src/main/java/eu/matherion/api/redis/RedisManager.java
++++ b/src/main/java/eu/matherion/api/redis/RedisManager.java
+@@ -1,7 +1,7 @@
+ package eu.matherion.api.redis;
+ 
+-import eu.matherion.api.ServerState;
+-import eu.matherion.api.ServerStateUpdate;
++import eu.matherion.api.servers.ServerState;
++import eu.matherion.api.servers.ServerStateUpdate;
+ import org.bukkit.util.Consumer;
+ 
+ import java.util.Map;
+@@ -34,5 +34,7 @@ public interface RedisManager<T> {
+ 
+     int subscribeToServerUpdates(Consumer<ServerStateUpdate> serverStateConsumer);
+ 
++    void publishServerUpdate(ServerStateUpdate update);
++
+     void cancelServerUpdateSubscription(int subscriptionId);
+ }
+diff --git a/src/main/java/eu/matherion/api/ServerState.java b/src/main/java/eu/matherion/api/servers/ServerState.java
+similarity index 96%
+rename from src/main/java/eu/matherion/api/ServerState.java
+rename to src/main/java/eu/matherion/api/servers/ServerState.java
+index 290aec32c585a105ccb2da56833d79e8d48a2d5b..3d82e83ce4d83a3ed6735e5f2a53f5519b078955 100644
+--- a/src/main/java/eu/matherion/api/ServerState.java
++++ b/src/main/java/eu/matherion/api/servers/ServerState.java
+@@ -1,5 +1,7 @@
+-package eu.matherion.api;
++package eu.matherion.api.servers;
+ 
++import eu.matherion.api.StateType;
++import eu.matherion.api.TeamMode;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+ 
+ import java.io.Serializable;
+diff --git a/src/main/java/eu/matherion/api/ServerStateUpdate.java b/src/main/java/eu/matherion/api/servers/ServerStateUpdate.java
+similarity index 53%
+rename from src/main/java/eu/matherion/api/ServerStateUpdate.java
+rename to src/main/java/eu/matherion/api/servers/ServerStateUpdate.java
+index 1874b89f353797cc023b34fba79a20b3172fb34d..d165ec4fd35b7cd2e278fdaa707eea61305d7fa1 100644
+--- a/src/main/java/eu/matherion/api/ServerStateUpdate.java
++++ b/src/main/java/eu/matherion/api/servers/ServerStateUpdate.java
+@@ -1,5 +1,6 @@
+-package eu.matherion.api;
++package eu.matherion.api.servers;
+ 
++import eu.matherion.api.servers.ServerState;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+ 
+ public class ServerStateUpdate {
+@@ -22,4 +23,17 @@ public class ServerStateUpdate {
+     public ServerState getServerState() {
+         return serverState;
+     }
++
++    public boolean isRunning() {
++        return serverState != null;
++    }
++
++    @Override
++    public String toString() {
++        final StringBuilder sb = new StringBuilder("ServerStateUpdate{");
++        sb.append("serverName='").append(serverName).append('\'');
++        sb.append(", serverState=").append(serverState);
++        sb.append('}');
++        return sb.toString();
++    }
+ }
+diff --git a/src/main/java/eu/matherion/api/servers/pubsub/ServerPubSub.java b/src/main/java/eu/matherion/api/servers/pubsub/ServerPubSub.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..b678d20305bac8969a8ba93fab0f1e9c5fd8527f
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/servers/pubsub/ServerPubSub.java
+@@ -0,0 +1,17 @@
++package eu.matherion.api.servers.pubsub;
++
++import eu.matherion.api.servers.ServerState;
++import eu.matherion.api.servers.pubsub.subscriber.ServerStateUpdateSubscriber;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++public interface ServerPubSub {
++  void updateServerState(String serverName, @Nullable ServerState serverState);
++
++  void addServerStateUpdateSubscribers(ServerStateUpdateSubscriber... subscribers);
++
++  void addServerStateUpdateSubscriber(ServerStateUpdateSubscriber subscriber);
++
++  void removeServerStateUpdateSubscriber(ServerStateUpdateSubscriber subscriber);
++
++  <T> void sendAction(String action, T data);
++}
+diff --git a/src/main/java/eu/matherion/api/servers/pubsub/message/Action.java b/src/main/java/eu/matherion/api/servers/pubsub/message/Action.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..20dd4b952cd829395aa8f6b33b4df823d3aa0a83
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/servers/pubsub/message/Action.java
+@@ -0,0 +1,14 @@
++package eu.matherion.api.servers.pubsub.message;
++
++public class Action<T> {
++
++  public String action;
++
++  public T data;
++
++  public Action(String action, T data) {
++    this.action = action;
++    this.data = data;
++  }
++
++}
+diff --git a/src/main/java/eu/matherion/api/servers/pubsub/message/Event.java b/src/main/java/eu/matherion/api/servers/pubsub/message/Event.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8b4da1ec83794515f1e632772133e01bbb1c44d6
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/servers/pubsub/message/Event.java
+@@ -0,0 +1,14 @@
++package eu.matherion.api.servers.pubsub.message;
++
++public class Event<T> {
++
++  public String event;
++
++  public T data;
++
++  public Event(String event, T data) {
++    this.event = event;
++    this.data = data;
++  }
++
++}
+diff --git a/src/main/java/eu/matherion/api/servers/pubsub/subscriber/ServerStateUpdateSubscriber.java b/src/main/java/eu/matherion/api/servers/pubsub/subscriber/ServerStateUpdateSubscriber.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..e590f62d09aa17653f0f6a1ae56ebdb4a43ea50b
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/servers/pubsub/subscriber/ServerStateUpdateSubscriber.java
+@@ -0,0 +1,6 @@
++package eu.matherion.api.servers.pubsub.subscriber;
++
++import eu.matherion.api.servers.ServerStateUpdate;
++
++public interface ServerStateUpdateSubscriber extends Subscriber<ServerStateUpdate> {
++}
+diff --git a/src/main/java/eu/matherion/api/servers/pubsub/subscriber/Subscriber.java b/src/main/java/eu/matherion/api/servers/pubsub/subscriber/Subscriber.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..2e6c15700c72d7e55bdbaa708e9518a0cdc70fe9
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/servers/pubsub/subscriber/Subscriber.java
+@@ -0,0 +1,6 @@
++package eu.matherion.api.servers.pubsub.subscriber;
++
++import org.bukkit.util.Consumer;
++
++public interface Subscriber<T> extends Consumer<T> {
++}
+diff --git a/src/main/java/org/bukkit/Server.java b/src/main/java/org/bukkit/Server.java
+index 6565adaaa7edab85804ea43984dc6c849d90b4e3..7789fbd91f82d87055e5714f62ba57c0739ecad7 100644
+--- a/src/main/java/org/bukkit/Server.java
++++ b/src/main/java/org/bukkit/Server.java
+@@ -14,7 +14,7 @@ import java.util.UUID;
+ import java.util.function.Consumer;
+ import java.util.logging.Logger;
+ 
+-import eu.matherion.api.ServerState;
++import eu.matherion.api.servers.ServerState;
+ import eu.matherion.api.database.DatabaseManager;
+ import eu.matherion.api.redis.RedisManager;
+ import org.bukkit.Warning.WarningState;
