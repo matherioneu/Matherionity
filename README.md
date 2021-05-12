@@ -80,53 +80,6 @@ This will rebuild all patches.
 
 ## The API
 
-### Redis
-
-The default RedisManager implementation (`eu.matherion.server.redis.impl.RedissonManager`) uses the Redisson library.
-
-You can access the RedisManager via `Server#getRedisManager()`.
-
-Example:
-```java
-class YourPlugin {
-    public void yourFunction() {
-       // ...
-       RedisManager redisManager = Bukkit.getServer().getRedisManager();
-    }
-}
-```
-
-### Available Functions
-
-`eu.matherion.api.redis.RedisManager` is an interface. If you want to use a different library for Redis (Jedis, for example), you can create your own RedisManager
-implementation.
-
-#### T getClient();
-
-Gets the Client. The basic RedisManager implementation uses Redisson &mdash;
-See the [Redisson Docs](https://github.com/redisson/redisson/wiki/Table-of-Content) for more info.
-
-#### Map<String, ServerState> getServers();
-
-Gets all servers from Redis.
-
-#### void removeServer(String server);
-
-Removes the ServerState of a certain server.
-
-#### Future<Map<String, ServerState>> getServersAsync();
-
-This function is not implemented yet. If you try to use it, it will throw a `java.lang.UnsupportedOperationException`.
-
-#### void setServerState(String server, ServerState serverState);
-
-Sets the `ServerState` of a certain server. If you want to set a state of the current server,
-use `Server#setServerState(ServerState)` instead.
-
-#### Future<Void> setServerStateAsync(String server, ServerState serverState) throws ExecutionException, InterruptedException;
-
-This function is not implemented yet. If you try to use it, it will throw a `java.lang.UnsupportedOperationException`.
-
 ## Database
 
 Matherionity uses ORMLite for all database actions. In order to use the database, you will have to create a model (essentially just a POJO with few annotations). 
