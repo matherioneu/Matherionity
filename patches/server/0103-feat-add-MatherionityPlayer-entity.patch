@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 14 May 2021 15:52:03 +0200
+Subject: [PATCH] feat: add MatherionityPlayer entity
+
+
+diff --git a/src/main/java/eu/matherion/server/ayaka/Ayaka.java b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+index df087a8b7f95c9aae0ec895dedd79f6f37a7f5d2..a26b497cf15eeb8e90d8f996951158f0e5d0c686 100644
+--- a/src/main/java/eu/matherion/server/ayaka/Ayaka.java
++++ b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+@@ -9,8 +9,7 @@ import eu.matherion.api.servers.data.ServerStateUpdate;
+ import eu.matherion.api.servers.data.fetch.data.FetchAllStatesData;
+ import eu.matherion.api.servers.data.fetch.data.FetchOneStateData;
+ import eu.matherion.api.servers.data.fetch.response.FetchAllStatesResponse;
+-import eu.matherion.api.servers.data.fetch.response.FetchOneStateResponse;
+-import eu.matherion.api.servers.db.Session;
++import eu.matherion.api.database.entity.Session;
+ import eu.matherion.api.servers.pubsub.ServerPubSub;
+ import eu.matherion.api.servers.pubsub.message.Action;
+ import eu.matherion.api.servers.pubsub.subscriber.ServerStateUpdateSubscriber;
+@@ -55,11 +54,7 @@ public class Ayaka implements ServerPubSub {
+   );
+ 
+   public Ayaka(String instanceUrl, boolean secure) throws Exception {
+-    DatabaseManager db = Bukkit.getServer().getDatabaseManager();
+-
+-    db.loadDao(Session.class);
+-    this.sessionDao = db.getDao(Session.class);
+-
++    this.sessionDao = Bukkit.getServer().getDatabaseManager().getDao(Session.class);
+     this.session = createSession(Bukkit.getServer().getFullServerName());
+ 
+     Config config = new Config()
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index af7025b57915dad33e80e6e2dd466aeb666ffafe..a23152aa24ed6bce1fa50643495b0542f479f2f5 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -12,6 +12,8 @@ import com.mojang.brigadier.tree.CommandNode;
+ import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.serialization.DynamicOps;
+ import com.mojang.serialization.Lifecycle;
++import eu.matherion.api.database.entity.MatherionPlayer;
++import eu.matherion.api.database.entity.Session;
+ import eu.matherion.api.servers.data.StateType;
+ import eu.matherion.api.database.DatabaseConnection;
+ import eu.matherion.api.database.DatabaseManager;
+@@ -960,6 +962,9 @@ public final class CraftServer implements Server {
+         try {
+             conn.connect();
+             this.databaseManager = new DatabaseManagerImpl(conn);
++
++            this.databaseManager.loadDao(MatherionPlayer.class);
++            this.databaseManager.loadDao(Session.class);
+         } catch (SQLException e) {
+             getLogger().severe("[DB] An error occurred while creating a database connection: ");
+             e.printStackTrace();
