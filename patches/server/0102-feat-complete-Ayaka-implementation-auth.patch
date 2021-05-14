@@ -1,0 +1,674 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 14 May 2021 05:07:29 +0200
+Subject: [PATCH] feat: complete Ayaka implementation + auth
+
+
+diff --git a/pom.xml b/pom.xml
+index 86dde79d5691f6d8e35f84921df5714c398b6a60..289f8305afe25923b2e8ec8b5a156dae5af292a1 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -69,7 +69,6 @@
+             <artifactId>tyrus-standalone-client</artifactId>
+             <version>2.0.0</version>
+         </dependency>
+-
+         <!-- because hikari -->
+         <dependency>
+             <groupId>org.slf4j</groupId>
+diff --git a/src/main/java/eu/matherion/server/ayaka/Ayaka.java b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+index da2cd9418dcda6c621f657035b1061cb602e01f5..df087a8b7f95c9aae0ec895dedd79f6f37a7f5d2 100644
+--- a/src/main/java/eu/matherion/server/ayaka/Ayaka.java
++++ b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+@@ -1,55 +1,120 @@
+ package eu.matherion.server.ayaka;
+ 
+ import com.google.common.collect.Lists;
+-import eu.matherion.api.servers.ServerState;
+-import eu.matherion.api.servers.ServerStateUpdate;
++import com.j256.ormlite.dao.Dao;
++import com.j256.ormlite.stmt.DeleteBuilder;
++import eu.matherion.api.database.DatabaseManager;
++import eu.matherion.api.servers.data.ServerState;
++import eu.matherion.api.servers.data.ServerStateUpdate;
++import eu.matherion.api.servers.data.fetch.data.FetchAllStatesData;
++import eu.matherion.api.servers.data.fetch.data.FetchOneStateData;
++import eu.matherion.api.servers.data.fetch.response.FetchAllStatesResponse;
++import eu.matherion.api.servers.data.fetch.response.FetchOneStateResponse;
++import eu.matherion.api.servers.db.Session;
+ import eu.matherion.api.servers.pubsub.ServerPubSub;
+ import eu.matherion.api.servers.pubsub.message.Action;
+ import eu.matherion.api.servers.pubsub.subscriber.ServerStateUpdateSubscriber;
++import eu.matherion.server.ayaka.rest.RestResponse;
++import kong.unirest.Config;
++import kong.unirest.GetRequest;
++import kong.unirest.JsonObjectMapper;
++import kong.unirest.UnirestInstance;
++import kong.unirest.json.JSONObject;
++import org.bukkit.Bukkit;
+ import org.bukkit.configuration.ConfigurationSection;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+ 
+ import java.io.IOException;
+ import java.net.URI;
++import java.sql.SQLException;
+ import java.util.AbstractMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.UUID;
+ 
+ public class Ayaka implements ServerPubSub {
+ 
+-  private AyakaWebSocketClient client;
++  private AyakaWebSocketClient wsClient;
++
++  private UnirestInstance restClient;
+ 
+   private List<ServerStateUpdateSubscriber> stateUpdateSubscribers = Lists.newArrayList();
+ 
++  private Session session;
++
++  private Dao<Session, UUID> sessionDao;
++
++  public static final String AUTH_HEADER_NAME = "Authorization";
++
++  public static final String AUTH_TOKEN_PREFIX = "Bearer";
++
+   public static final Map<String, ?> defaultConfig = Map.ofEntries(
+     new AbstractMap.SimpleEntry<>("connector", Ayaka.class.getName()),
+-    new AbstractMap.SimpleEntry<>("url", "ws://127.0.0.1:4200")
++    new AbstractMap.SimpleEntry<>("url", "127.0.0.1:4200"),
++    new AbstractMap.SimpleEntry<>("secure", false)
+   );
+ 
+-  public Ayaka(String instanceUrl) throws Exception {
+-    if (!instanceUrl.startsWith("ws"))
+-      throw new Exception("Instance URL needs to start with ws:// or wss://");
++  public Ayaka(String instanceUrl, boolean secure) throws Exception {
++    DatabaseManager db = Bukkit.getServer().getDatabaseManager();
++
++    db.loadDao(Session.class);
++    this.sessionDao = db.getDao(Session.class);
++
++    this.session = createSession(Bukkit.getServer().getFullServerName());
++
++    Config config = new Config()
++      .defaultBaseUrl(makeUrl(instanceUrl, secure, "http"))
++      .addDefaultHeader(AUTH_HEADER_NAME, String.format("%s %s", AUTH_TOKEN_PREFIX, session.getId()))
++      .setObjectMapper(new JsonObjectMapper());
++
++    this.restClient = new UnirestInstance(config);
++    this.wsClient = new AyakaWebSocketClient(URI.create(makeUrl(instanceUrl, secure, "ws")), this.session.getId().toString());
+ 
+-    this.client = new AyakaWebSocketClient(URI.create(instanceUrl));
+     setupClient();
+   }
+ 
+   public Ayaka(ConfigurationSection section) throws Exception {
+-    this(section.getString("url"));
++    this(
++      section.getString("url"),
++      section.getBoolean("secure")
++    );
++  }
++
++  public static String makeUrl(String instanceUrl, boolean secure, String protocol) {
++    return String.format("%s%s://%s", protocol, secure ? "s" : "", instanceUrl);
++  }
++
++  public static String formatBearerToken(String token) {
++    return String.format("%s %s", AUTH_TOKEN_PREFIX, token);
++  }
++
++  private Session createSession(String serverName) throws SQLException {
++    Bukkit.getLogger().info("[Ayaka] Deleting all existing sessions...");
++
++    DeleteBuilder deleteBuilder = this.sessionDao.deleteBuilder();
++    deleteBuilder.where().eq("serverName", serverName);
++    deleteBuilder.delete();
++
++    Session session = new Session(serverName);
++    this.sessionDao.create(session);
++
++    Bukkit.getLogger().info(String.format("[Ayaka] Created a new session: %s", session.getId()));
++
++    return session;
+   }
+ 
+   private void setupClient() {
+-    this.client.setAyakaMessageHandler((action, data) -> {
++    this.wsClient.setAyakaMessageHandler((action, data) -> {
+       if (action.equals("stateUpdate")) {
+         stateUpdateSubscribers.forEach(subscriber -> subscriber.accept((ServerStateUpdate) data));
+       }
+     });
+ 
+-    this.client.connect();
++    this.wsClient.connect();
+   }
+ 
+-  public AyakaWebSocketClient getClient() {
+-    return client;
++  public AyakaWebSocketClient getWebSocketClient() {
++    return wsClient;
+   }
+ 
+   @Override
+@@ -74,13 +139,63 @@ public class Ayaka implements ServerPubSub {
+ 
+   @Override
+   public <T> void sendAction(String action, T data) {
+-    getClient().sendMessage(new Action<>(action, data));
++    getWebSocketClient().sendMessage(new Action<>(action, data));
++  }
++
++  @Override
++  public void askForOneState(FetchOneStateData data) {
++    sendAction("fetchOneState", data);
++  }
++
++  @Override
++  public void askForAllStates(FetchAllStatesData data) {
++    sendAction("fetchAllStates", data);
++  }
++
++  @Nullable
++  @Override
++  public ServerState getOneState(FetchOneStateData data) {
++    GetRequest req = restClient.get("/state/fetch").queryString(Map.of("id", data.id, "name", data.name));
++
++    try {
++      // idk why but FetchOneStateResponse is just broken and idgaf at this point
++      RestResponse<JSONObject> response = new RestResponse<>(req.asJson().getBody().getObject(), null);
++
++      return new ServerState(response.data.getJSONObject("state"));
++    } catch (Exception e) {
++      e.printStackTrace();
++      return null;
++    }
++  }
++
++  @Nullable
++  @Override
++  public Map<String, ServerState> getAllStates(FetchAllStatesData data) {
++    GetRequest req = restClient.get("/state/fetchAll");
++
++    if (data.name != null)
++      req.queryString(Map.of("name", data.name));
++
++    try {
++      RestResponse<FetchAllStatesResponse> response = new RestResponse<>(req.asJson().getBody().getObject(), FetchAllStatesResponse.class);
++      if (!response.success) return null;
++
++      return response.data.states;
++    } catch (Exception e) {
++      e.printStackTrace();
++      return null;
++    }
++  }
++
++  @Override
++  public @Nullable Map<String, ServerState> getAllStates() {
++    return getAllStates(new FetchAllStatesData());
+   }
+ 
+   @Override
+   public void close() {
+     try {
+-      getClient().close();
++      getWebSocketClient().close();
+     } catch (IOException e) {
+       e.printStackTrace();
+     }
+diff --git a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+index cb0097fd72c05a98dd73fa533dfebd7728d55dc7..f7ff9c0886e0ef660d6e75fbb00df2efc0d31d30 100644
+--- a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
++++ b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+@@ -3,22 +3,30 @@ package eu.matherion.server.ayaka;
+ import com.google.gson.Gson;
+ import eu.matherion.api.servers.pubsub.message.Event;
+ import eu.matherion.server.ayaka.handler.AyakaMessageHandler;
+-import eu.matherion.server.ayaka.json.JsonDecoder;
+ import eu.matherion.server.ayaka.json.JsonEncoder;
+-import org.bukkit.Bukkit;
+-
+ import jakarta.websocket.*;
++import org.bukkit.Bukkit;
+ 
+ import java.io.IOException;
+ import java.net.URI;
++import java.util.Collections;
++import java.util.List;
++import java.util.Map;
+ 
+-@ClientEndpoint(decoders = {JsonDecoder.class}, encoders = {JsonEncoder.class})
+-public class AyakaWebSocketClient {
++/**
++ * The client handling the connection to the Ayaka WebSocket.
++ */
++@ClientEndpoint(encoders = {JsonEncoder.class})
++public class AyakaWebSocketClient extends Endpoint {
+ 
+   private Session session = null;
+ 
+   private URI uri;
+ 
++  private String sessionId;
++
++  private ClientEndpointConfig clientEndpointConfig;
++
+   private Gson gson = new Gson();
+ 
+   private AyakaMessageHandler ayakaMessageHandler = null;
+@@ -27,16 +35,32 @@ public class AyakaWebSocketClient {
+ 
+   private int connectAttempts = 0;
+ 
+-  public AyakaWebSocketClient(URI uri) {
+-    this.uri = uri;
++  public AyakaWebSocketClient(URI uri, String sessionId) {
++    this.uri = uri.resolve("/ws");
++    this.sessionId = sessionId;
++
++    ClientEndpointConfig.Builder configBuilder = ClientEndpointConfig.Builder.create();
++    configBuilder.configurator(new ClientEndpointConfig.Configurator() {
++      @Override
++      public void beforeRequest(Map<String, List<String>> headers) {
++        headers.put(Ayaka.AUTH_HEADER_NAME, Collections.singletonList(Ayaka.formatBearerToken(sessionId)));
++      }
++    });
++
++    this.clientEndpointConfig = configBuilder.build();
+   }
+ 
++  /**
++   * Connect to the WebSocket
++   */
+   public void connect() {
+     try {
+       connectAttempts++;
+       Bukkit.getLogger().info(String.format("[Ayaka] Connection attempt #%s...", connectAttempts));
++
+       WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+-      container.connectToServer(this, this.uri);
++      container.connectToServer(this, clientEndpointConfig, this.uri);
++
+       connectAttempts = 0;
+     } catch (Exception e) {
+       Bukkit.getLogger().severe(String.format("[Ayaka] Connection attempt #%s failed, retrying in 5s.", connectAttempts));
+@@ -50,33 +74,57 @@ public class AyakaWebSocketClient {
+     }
+   }
+ 
++  /**
++   * WebSocket Connection Open Handler
++   *
++   * @param session The WebSocket session
++   */
+   @OnOpen
+-  public void onOpen(Session session) {
+-    Bukkit.getLogger().info("[Ayaka] Connected to WebSocket @ " + this.uri.toString());
++  @Override
++  public void onOpen(Session session, EndpointConfig config) {
+     this.session = session;
++    Bukkit.getLogger().info("[Ayaka] Connected to WebSocket @ " + this.uri.toString());
++
++    Bukkit.getLogger().info("[PubSub] Pushing initial server state");
++    Bukkit.getServer().pushServerState();
+   }
+ 
++  /**
++   * WebSocket Message Handler
++   *
++   * @param str The message
++   */
+   @OnMessage
+-  public void onMessage(Object obj) {
++  public void onMessage(String str) {
+     try {
+-      Event event = Event.class.cast(obj);
++      // Not using a JsonDecoder as there would have to
++      // be a specific one for the Event class.
++      Event event = gson.fromJson(str, Event.class);
+ 
+-      if (ayakaMessageHandler != null)
++      // Runs the MessageHandler if it's set.
++      if (ayakaMessageHandler != null) {
+         ayakaMessageHandler.accept(event.event, event.data);
+-    } catch (ClassCastException e) {
+-      Bukkit.getLogger().warning("[Ayaka] Recieved a non-Event message from the WebSocket");
+-      Bukkit.getLogger().warning(obj.toString());
++      }
++    } catch (Exception ignored) {
++      // This exception is ignored. If the message failed, it was malformed
++      // and thus is not supposed to be handled.
+     }
+   }
+ 
++  /**
++   * WebSocket Close Handler
++   */
+   @OnClose
+-  public void onClose() {
++  @Override
++  public void onClose(Session session, CloseReason closeReason) {
+     Bukkit.getLogger().warning("[Ayaka] Connection to WebSocket closed.");
++
++    // The reconnect property is set to false if the close() function is called,
++    // because that indicates the lost connection was asked for (eg. server shutdown)
+     if (reconnect) {
+-      Bukkit.getLogger().info("[Ayaka] Attempting reconnect.");
++      Bukkit.getLogger().info("[Ayaka] Attempting reconnect...");
+       connect();
+     }
+-    // TODO: reconnect, otheriwse shutdown
+   }
+ 
+   public void sendMessage(Object message) {
+@@ -91,6 +139,9 @@ public class AyakaWebSocketClient {
+     return session;
+   }
+ 
++  /**
++   * Closes the connection.
++   */
+   public void close() throws IOException {
+     this.reconnect = false;
+     getSession().close();
+diff --git a/src/main/java/eu/matherion/server/ayaka/json/JsonDecoder.java b/src/main/java/eu/matherion/server/ayaka/json/JsonDecoder.java
+deleted file mode 100644
+index 11893447781bbfaee05812bfb6452b38090b5c90..0000000000000000000000000000000000000000
+--- a/src/main/java/eu/matherion/server/ayaka/json/JsonDecoder.java
++++ /dev/null
+@@ -1,35 +0,0 @@
+-package eu.matherion.server.ayaka.json;
+-
+-import com.google.gson.Gson;
+-import jakarta.websocket.DecodeException;
+-import jakarta.websocket.Decoder;
+-import jakarta.websocket.EndpointConfig;
+-
+-public class JsonDecoder implements Decoder.Text<Object> {
+-
+-  private Gson gson = new Gson();
+-
+-  @Override
+-  public Object decode(String s) throws DecodeException {
+-    return gson.fromJson(s, Object.class);
+-  }
+-
+-  @Override
+-  public boolean willDecode(String s) {
+-    try {
+-      gson.fromJson(s, Object.class);
+-      return true;
+-    } catch(com.google.gson.JsonSyntaxException ex) {
+-      return false;
+-    }
+-  }
+-
+-  @Override
+-  public void init(EndpointConfig config) {
+-  }
+-
+-  @Override
+-  public void destroy() {
+-  }
+-}
+-
+diff --git a/src/main/java/eu/matherion/server/ayaka/rest/RestError.java b/src/main/java/eu/matherion/server/ayaka/rest/RestError.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..71eef25ed455375ad9e4ee62e8afc3f80563e649
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/ayaka/rest/RestError.java
+@@ -0,0 +1,29 @@
++package eu.matherion.server.ayaka.rest;
++
++import eu.matherion.api.utils.JsonSerializable;
++import kong.unirest.json.JSONObject;
++
++public class RestError extends JsonSerializable {
++
++  public ErrorKind kind;
++
++  public String message;
++
++  public RestError(ErrorKind kind, String message) {
++    this.kind = kind;
++    this.message = message;
++  }
++
++  public RestError(JSONObject object) {
++    this.kind = object.getEnum(ErrorKind.class, "kind");
++    this.message = object.getString("message");
++  }
++
++  enum ErrorKind {
++    INTERNAL,
++    UNAUTHORIZED,
++    FORBIDDEN,
++    USER_INPUT
++  }
++
++}
+diff --git a/src/main/java/eu/matherion/server/ayaka/rest/RestResponse.java b/src/main/java/eu/matherion/server/ayaka/rest/RestResponse.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..4c6f70d348c73d24646712af5bc9e930958e7cce
+--- /dev/null
++++ b/src/main/java/eu/matherion/server/ayaka/rest/RestResponse.java
+@@ -0,0 +1,71 @@
++package eu.matherion.server.ayaka.rest;
++
++import kong.unirest.json.JSONObject;
++import org.checkerframework.checker.nullness.qual.Nullable;
++
++import java.lang.reflect.Constructor;
++import java.lang.reflect.InvocationTargetException;
++
++public class RestResponse<T> {
++
++  public boolean success;
++
++  @Nullable
++  public T data;
++
++  @Nullable
++  public RestError error;
++
++  public RestResponse(boolean success, @Nullable T data, @Nullable RestError error) throws Exception {
++    this.success = success;
++    this.data = data;
++    this.error = error;
++
++    if (!success && data != null) throw new Exception("Cannot have data if success = false");
++    if (success && error != null) throw new Exception("Cannot have error if success = true");
++  }
++
++  public RestResponse(T data) {
++    this.success = true;
++    this.data = data;
++  }
++
++  public RestResponse(RestError error) {
++    this.success = false;
++    this.error = error;
++  }
++
++  public RestResponse(JSONObject object, @Nullable Class<? extends T> clazz) throws Exception {
++    if (!object.has("success"))
++      throw new Exception("Invalid RestResponse: The success property is missing");
++
++    this.success = object.getBoolean("success");
++    this.data = this.success ? object.has("data") ? parseData(clazz, object.getJSONObject("data")) : null : null;
++
++    if (!this.success && !object.has("error"))
++      throw new Exception("Invalid RestResponse: Missing error when success = false");
++
++    this.error = !this.success ? new RestError(object.getJSONObject("error")) : null;
++  }
++
++  private T parseData(@Nullable Class<? extends T> clazz, JSONObject object) {
++    if (clazz == null) return (T) object; // fallback to basic casting
++
++    try {
++      Constructor<? extends T> constructor = clazz.getConstructor(JSONObject.class);
++      return constructor.newInstance(object);
++    } catch (InvocationTargetException | InstantiationException | IllegalAccessException | NoSuchMethodException e) {
++      return (T) object; // fallback to basic casting
++    }
++  }
++
++  @Override
++  public String toString() {
++    final StringBuilder sb = new StringBuilder("RestResponse{");
++    sb.append("success=").append(success);
++    sb.append(", data=").append(data);
++    sb.append(", error=").append(error);
++    sb.append('}');
++    return sb.toString();
++  }
++}
+diff --git a/src/main/java/eu/matherion/server/database/impl/HikariConnection.java b/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
+index bf2fc7bc5eaf44c8dc1c09a8c15d736a229e76b8..a5e18aaab0016718d339285dbdd0ee0506e5782b 100644
+--- a/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
++++ b/src/main/java/eu/matherion/server/database/impl/HikariConnection.java
+@@ -104,6 +104,8 @@ public class HikariConnection implements DatabaseConnection<HikariDataSource> {
+     public void closeConnection() {
+         if (dataSource == null) return;
+         dataSource.close();
++
++        dataSource.close();
+     }
+ 
+     @Override
+diff --git a/src/main/java/net/minecraft/server/MinecraftServer.java b/src/main/java/net/minecraft/server/MinecraftServer.java
+index 7941a8a3ba892fb254b1cf0f6e99b0b9dc352999..ada1d67612dcd44ec14dc5c3829981d19a1929a9 100644
+--- a/src/main/java/net/minecraft/server/MinecraftServer.java
++++ b/src/main/java/net/minecraft/server/MinecraftServer.java
+@@ -9,6 +9,8 @@ import com.mojang.authlib.GameProfile;
+ import com.mojang.authlib.GameProfileRepository;
+ import com.mojang.authlib.minecraft.MinecraftSessionService;
+ import com.mojang.datafixers.DataFixer;
++import eu.matherion.api.servers.data.fetch.data.FetchAllStatesData;
++import eu.matherion.api.servers.data.fetch.data.FetchOneStateData;
+ import io.netty.buffer.ByteBuf;
+ import io.netty.buffer.ByteBufOutputStream;
+ import io.netty.buffer.Unpooled;
+@@ -69,9 +71,7 @@ import net.minecraft.core.RegistryMaterials;
+ import net.minecraft.data.worldgen.BiomeDecoratorGroups;
+ import net.minecraft.gametest.framework.GameTestHarnessTicker;
+ import net.minecraft.network.chat.ChatComponentText;
+-import net.minecraft.network.chat.ChatMessage;
+ import net.minecraft.network.chat.IChatBaseComponent;
+-import net.minecraft.network.protocol.Packet;
+ import net.minecraft.network.protocol.game.PacketPlayOutServerDifficulty;
+ import net.minecraft.network.protocol.game.PacketPlayOutUpdateTime;
+ import net.minecraft.network.protocol.status.ServerPing;
+@@ -80,7 +80,6 @@ import net.minecraft.resources.ResourceKey;
+ import net.minecraft.server.bossevents.BossBattleCustomData;
+ import net.minecraft.server.level.ChunkProviderServer;
+ import net.minecraft.server.level.EntityPlayer;
+-import net.minecraft.server.level.TicketType;
+ import net.minecraft.server.level.WorldProviderNormal;
+ import net.minecraft.server.level.WorldServer;
+ import net.minecraft.server.level.progress.WorldLoadListener;
+@@ -100,7 +99,6 @@ import net.minecraft.util.CryptographyException;
+ import net.minecraft.util.IProgressUpdate;
+ import net.minecraft.util.MathHelper;
+ import net.minecraft.util.MinecraftEncryption;
+-import net.minecraft.util.Unit;
+ import net.minecraft.util.profiling.GameProfilerDisabled;
+ import net.minecraft.util.profiling.GameProfilerFiller;
+ import net.minecraft.util.profiling.GameProfilerSwitcher;
+@@ -128,7 +126,6 @@ import net.minecraft.world.level.biome.BiomeManager;
+ import net.minecraft.world.level.biome.WorldChunkManager;
+ import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.entity.TileEntityHopper;
+-import net.minecraft.world.level.border.IWorldBorderListener;
+ import net.minecraft.world.level.border.WorldBorder;
+ import net.minecraft.world.level.chunk.ChunkGenerator;
+ import net.minecraft.world.level.dimension.DimensionManager;
+@@ -144,7 +141,6 @@ import net.minecraft.world.level.storage.IWorldDataServer;
+ import net.minecraft.world.level.storage.PersistentCommandStorage;
+ import net.minecraft.world.level.storage.SaveData;
+ import net.minecraft.world.level.storage.SavedFile;
+-import net.minecraft.world.level.storage.SecondaryWorldData;
+ import net.minecraft.world.level.storage.WorldData;
+ import net.minecraft.world.level.storage.WorldNBTStorage;
+ import net.minecraft.world.level.storage.WorldPersistentData;
+@@ -172,9 +168,6 @@ import net.minecraft.server.dedicated.DedicatedServer;
+ import net.minecraft.server.dedicated.DedicatedServerProperties;
+ import net.minecraft.util.datafix.DataConverterRegistry;
+ import net.minecraft.world.level.storage.WorldDataServer;
+-import org.bukkit.Bukkit;
+-import org.bukkit.craftbukkit.CraftServer;
+-import org.bukkit.craftbukkit.Main;
+ import org.bukkit.event.server.ServerLoadEvent;
+ // CraftBukkit end
+ 
+@@ -1076,7 +1069,7 @@ public abstract class MinecraftServer extends IAsyncTaskHandlerReentrant<TickTas
+                 // Matherion start
+                 playerList.updateServerState();
+                 // Matherione end
+-
++                
+                 LOGGER.info("Done ({})! For help, type \"help\"", doneTime);
+                 // Paper end
+ 
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index 1742746c606630720e4978b90eeaf3864fb54a84..af7025b57915dad33e80e6e2dd466aeb666ffafe 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -12,13 +12,11 @@ import com.mojang.brigadier.tree.CommandNode;
+ import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.serialization.DynamicOps;
+ import com.mojang.serialization.Lifecycle;
+-import eu.matherion.api.StateType;
++import eu.matherion.api.servers.data.StateType;
+ import eu.matherion.api.database.DatabaseConnection;
+ import eu.matherion.api.database.DatabaseManager;
+-import eu.matherion.api.servers.ServerState;
+-import eu.matherion.api.servers.ServerStateUpdate;
++import eu.matherion.api.servers.data.ServerState;
+ import eu.matherion.api.servers.pubsub.ServerPubSub;
+-import eu.matherion.api.servers.pubsub.subscriber.ServerStateUpdateSubscriber;
+ import eu.matherion.server.config.MatherionityConfig;
+ import eu.matherion.server.database.DatabaseManagerImpl;
+ import io.netty.buffer.ByteBuf;
+@@ -991,9 +989,6 @@ public final class CraftServer implements Server {
+         this.serverState = createServerState();
+         this.pubSub = pubSub;
+ 
+-        getLogger().info("[PubSub] Pushing initial server state");
+-        pushServerState();
+-
+         pubSub.addServerStateUpdateSubscriber(serverStateUpdate -> {
+             System.out.println("----update----");
+             System.out.println(serverStateUpdate);
+@@ -1006,7 +1001,7 @@ public final class CraftServer implements Server {
+         pubSub.close();
+     }
+ 
+-    private String getFullServerName() {
++    public String getFullServerName() {
+         return String.format("%s-%s", MatherionityConfig.serverName, MatherionityConfig.serverId);
+     }
+ 
+@@ -1015,6 +1010,7 @@ public final class CraftServer implements Server {
+         this.pubSub.updateServerState(getFullServerName(), serverState);
+     }
+ 
++    @Override
+     public void pushServerState() {
+         setServerState(getServerState());
+     }
+@@ -1661,8 +1657,7 @@ public final class CraftServer implements Server {
+ 
+     // Matherion start
+     @Override
+-    public @Nullable
+-    DatabaseManager getDatabaseManager() {
++    public @Nullable DatabaseManager getDatabaseManager() {
+         return this.databaseManager;
+     }
+ 

@@ -46,6 +46,11 @@
             <artifactId>guice</artifactId>
             <version>5.0.1</version>
         </dependency>
+        <dependency>
+            <groupId>com.konghq</groupId>
+            <version>3.11.09</version>
+            <artifactId>unirest-java</artifactId>
+        </dependency>
     </dependencies>
     <!-- Matherion end -->
 </project>
