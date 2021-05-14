@@ -1,0 +1,42 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Adam Volkman <itismaku@gmail.com>
+Date: Fri, 14 May 2021 21:51:27 +0200
+Subject: [PATCH] fix: fixed FetchAllStatesResponse (fixed by ZorTik :-))
+
+
+diff --git a/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchAllStatesResponse.java b/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchAllStatesResponse.java
+index 79cd9046bd00db4bead3d07136df6d22b4674e5c..d4763410b92412070e7833b831201645aa4713b1 100644
+--- a/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchAllStatesResponse.java
++++ b/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchAllStatesResponse.java
+@@ -1,10 +1,13 @@
+ package eu.matherion.api.servers.data.fetch.response;
+ 
++import com.google.gson.Gson;
++import com.google.gson.internal.LinkedTreeMap;
+ import eu.matherion.api.servers.data.ServerState;
+ import eu.matherion.api.utils.JsonSerializable;
+ import kong.unirest.json.JSONObject;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+ 
++import java.util.HashMap;
+ import java.util.Map;
+ 
+ public class FetchAllStatesResponse extends JsonSerializable {
+@@ -16,7 +19,16 @@ public class FetchAllStatesResponse extends JsonSerializable {
+   }
+ 
+   public FetchAllStatesResponse(JSONObject object) {
+-    this.states = (Map) object.getJSONObject("states").toMap(); // mmmmmm unsafee cast what could go wrong
++    this.states  = new HashMap<>() {{
++      Map<String, Object> map = object.getJSONObject("states").toMap();
++      Gson gson = new Gson();
++      for (Map.Entry<String, Object> entry : map.entrySet()) {
++        LinkedTreeMap treeMap = (LinkedTreeMap) entry.getValue();
++        String json = gson.toJson(treeMap);
++        ServerState serverState = gson.fromJson(json, ServerState.class);
++        put(entry.getKey(),serverState);
++      }
++    }};
+   }
+ 
+ }
