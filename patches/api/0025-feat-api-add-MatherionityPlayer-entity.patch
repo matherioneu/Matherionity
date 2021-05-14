@@ -1,0 +1,147 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Fri, 14 May 2021 16:00:58 +0200
+Subject: [PATCH] feat(api): add MatherionityPlayer entity
+
+
+diff --git a/src/main/java/eu/matherion/api/database/entity/MatherionPlayer.java b/src/main/java/eu/matherion/api/database/entity/MatherionPlayer.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..867224f68bec4338f3bf4d4586d617757a0847ed
+--- /dev/null
++++ b/src/main/java/eu/matherion/api/database/entity/MatherionPlayer.java
+@@ -0,0 +1,122 @@
++package eu.matherion.api.database.entity;
++
++import com.destroystokyo.paper.util.SneakyThrow;
++import com.j256.ormlite.field.DataType;
++import com.j256.ormlite.field.DatabaseField;
++import com.j256.ormlite.table.DatabaseTable;
++
++import java.util.UUID;
++
++@DatabaseTable(tableName = "matherion_player")
++public class MatherionPlayer {
++
++  @DatabaseField(id = true, dataType = DataType.UUID)
++  private UUID uuid;
++
++  @DatabaseField
++  private String nickname;
++
++  @DatabaseField
++  private int coins;
++
++  @DatabaseField(columnName = "last_dailyreward")
++  private String lastDailyReward;
++
++  @DatabaseField(columnName = "common_crates")
++  private int commonCrates;
++
++  @DatabaseField(columnName = "uncommon_crates")
++  private int uncommonCrates;
++
++  @DatabaseField(columnName = "rare_crates")
++  private int rareCrates;
++
++  @DatabaseField(columnName = "legendary_crates")
++  private int legendaryCrates;
++
++  public MatherionPlayer() {
++  }
++
++  public UUID getUuid() {
++    return uuid;
++  }
++
++  public void setUuid(UUID uuid) {
++    this.uuid = uuid;
++  }
++
++  public String getNickname() {
++    return nickname;
++  }
++
++  public void setNickname(String nickname) {
++    this.nickname = nickname;
++  }
++
++  public int getCoins() {
++    return coins;
++  }
++
++  public int setCoins(int coins) {
++    if (coins < 0)
++      SneakyThrow.sneaky(new Exception("coins cannot be < 0"));
++
++    this.coins = coins;
++    return coins;
++  }
++
++  public int incrementCoins(int coins) {
++    if (coins < 0)
++      SneakyThrow.sneaky(new Exception("coins cannot be < 0"));
++
++    return setCoins(this.coins + coins);
++  }
++
++  public int decrementCoins(int coins) {
++    if (coins < 0)
++      SneakyThrow.sneaky(new Exception("coins cannot be < 0"));
++
++    return setCoins(this.coins - coins);
++  }
++
++  public String getLastDailyReward() {
++    return lastDailyReward;
++  }
++
++  public void setLastDailyReward(String lastDailyReward) {
++    this.lastDailyReward = lastDailyReward;
++  }
++
++  public int getCommonCrates() {
++    return commonCrates;
++  }
++
++  public void setCommonCrates(int commonCrates) {
++    this.commonCrates = commonCrates;
++  }
++
++  public int getUncommonCrates() {
++    return uncommonCrates;
++  }
++
++  public void setUncommonCrates(int uncommonCrates) {
++    this.uncommonCrates = uncommonCrates;
++  }
++
++  public int getRareCrates() {
++    return rareCrates;
++  }
++
++  public void setRareCrates(int rareCrates) {
++    this.rareCrates = rareCrates;
++  }
++
++  public int getLegendaryCrates() {
++    return legendaryCrates;
++  }
++
++  public void setLegendaryCrates(int legendaryCrates) {
++    this.legendaryCrates = legendaryCrates;
++  }
++}
++
+diff --git a/src/main/java/eu/matherion/api/servers/db/Session.java b/src/main/java/eu/matherion/api/database/entity/Session.java
+similarity index 94%
+rename from src/main/java/eu/matherion/api/servers/db/Session.java
+rename to src/main/java/eu/matherion/api/database/entity/Session.java
+index f3df86f41f3fdf3b67140c40c732c6d7d0287713..442157ac253608598ad814228c18ef322e71839b 100644
+--- a/src/main/java/eu/matherion/api/servers/db/Session.java
++++ b/src/main/java/eu/matherion/api/database/entity/Session.java
+@@ -1,4 +1,4 @@
+-package eu.matherion.api.servers.db;
++package eu.matherion.api.database.entity;
+ 
+ import com.j256.ormlite.field.DataType;
+ import com.j256.ormlite.field.DatabaseField;
