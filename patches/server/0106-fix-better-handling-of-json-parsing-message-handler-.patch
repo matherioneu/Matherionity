@@ -1,0 +1,142 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 17 May 2021 19:10:52 +0200
+Subject: [PATCH] fix: better handling of json parsing, message handler fix
+
+
+diff --git a/src/main/java/eu/matherion/server/ayaka/Ayaka.java b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+index 20b610bce8d124a1d8803ad3d5b1301674387471..d284b25c225302aaf02cc71e88b6b2aebc7285d5 100644
+--- a/src/main/java/eu/matherion/server/ayaka/Ayaka.java
++++ b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+@@ -1,16 +1,16 @@
+ package eu.matherion.server.ayaka;
+ 
+ import com.google.common.collect.Lists;
+-import com.google.gson.Gson;
++import com.google.gson.JsonParser;
+ import com.j256.ormlite.dao.Dao;
+ import com.j256.ormlite.stmt.DeleteBuilder;
+-import eu.matherion.api.database.DatabaseManager;
++import eu.matherion.api.database.entity.Session;
+ import eu.matherion.api.servers.data.ServerState;
+ import eu.matherion.api.servers.data.ServerStateUpdate;
+ import eu.matherion.api.servers.data.fetch.data.FetchAllStatesData;
+ import eu.matherion.api.servers.data.fetch.data.FetchOneStateData;
+ import eu.matherion.api.servers.data.fetch.response.FetchAllStatesResponse;
+-import eu.matherion.api.database.entity.Session;
++import eu.matherion.api.servers.data.fetch.response.FetchOneStateResponse;
+ import eu.matherion.api.servers.pubsub.ServerPubSub;
+ import eu.matherion.api.servers.pubsub.message.Action;
+ import eu.matherion.api.servers.pubsub.subscriber.ServerStateUpdateSubscriber;
+@@ -161,10 +161,11 @@ public class Ayaka implements ServerPubSub {
+     GetRequest req = restClient.get("/state/fetch").queryString(Map.of("id", data.id, "name", data.name));
+ 
+     try {
+-      // idk why but FetchOneStateResponse is just broken and idgaf at this point
+-      RestResponse<JSONObject> response = new RestResponse<>(req.asJson().getBody().getObject(), null);
++      JsonParser parser = new JsonParser();
+ 
+-      return new ServerState(response.data.getJSONObject("state"));
++      RestResponse<FetchOneStateResponse> response = new RestResponse<>(parser.parse(req.asString().getBody()).getAsJsonObject(), FetchOneStateResponse.class);
++
++      return response.data.state;
+     } catch (Exception e) {
+       e.printStackTrace();
+       return null;
+@@ -180,8 +181,10 @@ public class Ayaka implements ServerPubSub {
+       req.queryString(Map.of("name", data.name));
+ 
+     try {
+-      RestResponse<FetchAllStatesResponse> response = new RestResponse<>(req.asJson().getBody().getObject(), FetchAllStatesResponse.class);
+-      if (!response.success) return null;
++      JsonParser parser = new JsonParser();
++
++      RestResponse<FetchAllStatesResponse> response = new RestResponse<>(parser.parse(req.asString().getBody()).getAsJsonObject(), FetchAllStatesResponse.class);
++      assert response.data != null;
+ 
+       return response.data.states;
+     } catch (Exception e) {
+diff --git a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+index 97540498edf047e60e0f38f41161ecc3d594ca21..5495be70854ef1dea4db60fca2a2f7c329730493 100644
+--- a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
++++ b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+@@ -116,7 +116,6 @@ public class AyakaWebSocketClient extends Endpoint {
+ 
+       // Runs the MessageHandler if it's set.
+       if (ayakaMessageHandler != null) {
+-        System.out.println("handler not null");
+        ayakaMessageHandler.accept(new Event(event));
+       }
+     } catch (Exception e) {
+diff --git a/src/main/java/eu/matherion/server/ayaka/rest/RestError.java b/src/main/java/eu/matherion/server/ayaka/rest/RestError.java
+index 71eef25ed455375ad9e4ee62e8afc3f80563e649..659afb2bb3c202e2eeec1887a7a6578db722bd79 100644
+--- a/src/main/java/eu/matherion/server/ayaka/rest/RestError.java
++++ b/src/main/java/eu/matherion/server/ayaka/rest/RestError.java
+@@ -1,5 +1,6 @@
+ package eu.matherion.server.ayaka.rest;
+ 
++import com.google.gson.JsonObject;
+ import eu.matherion.api.utils.JsonSerializable;
+ import kong.unirest.json.JSONObject;
+ 
+@@ -19,6 +20,11 @@ public class RestError extends JsonSerializable {
+     this.message = object.getString("message");
+   }
+ 
++  public RestError(JsonObject object) {
++    this.kind = ErrorKind.valueOf(object.get("kind").getAsString());
++    this.message = object.get("message").getAsString();
++  }
++
+   enum ErrorKind {
+     INTERNAL,
+     UNAUTHORIZED,
+diff --git a/src/main/java/eu/matherion/server/ayaka/rest/RestResponse.java b/src/main/java/eu/matherion/server/ayaka/rest/RestResponse.java
+index 4c6f70d348c73d24646712af5bc9e930958e7cce..602cc9539f59015f5dd813a5b69a60ef524e5bd4 100644
+--- a/src/main/java/eu/matherion/server/ayaka/rest/RestResponse.java
++++ b/src/main/java/eu/matherion/server/ayaka/rest/RestResponse.java
+@@ -1,5 +1,6 @@
+ package eu.matherion.server.ayaka.rest;
+ 
++import com.google.gson.JsonObject;
+ import kong.unirest.json.JSONObject;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+ 
+@@ -48,6 +49,19 @@ public class RestResponse<T> {
+     this.error = !this.success ? new RestError(object.getJSONObject("error")) : null;
+   }
+ 
++  public RestResponse(JsonObject object, @Nullable Class<? extends T> clazz) throws Exception {
++    if (!object.has("success"))
++      throw new Exception("Invalid RestResponse: The success property is missing");
++
++    this.success = object.get("success").getAsBoolean();
++    this.data = this.success ? object.has("data") ? parseData(clazz, object.get("data").getAsJsonObject()) : null : null;
++
++    if (!this.success && !object.has("error"))
++      throw new Exception("Invalid RestResponse: Missing error when success = false");
++
++    this.error = !this.success ? new RestError(object.get("error").getAsJsonObject()) : null;
++  }
++
+   private T parseData(@Nullable Class<? extends T> clazz, JSONObject object) {
+     if (clazz == null) return (T) object; // fallback to basic casting
+ 
+@@ -59,6 +73,17 @@ public class RestResponse<T> {
+     }
+   }
+ 
++  private T parseData(@Nullable Class<? extends T> clazz, JsonObject object) {
++    if (clazz == null) return (T) object; // fallback to basic casting
++
++    try {
++      Constructor<? extends T> constructor = clazz.getConstructor(JsonObject.class);
++      return constructor.newInstance(object);
++    } catch (InvocationTargetException | InstantiationException | IllegalAccessException | NoSuchMethodException e) {
++      return (T) object; // fallback to basic casting
++    }
++  }
++
+   @Override
+   public String toString() {
+     final StringBuilder sb = new StringBuilder("RestResponse{");

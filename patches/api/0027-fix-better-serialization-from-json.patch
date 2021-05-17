@@ -1,0 +1,148 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 17 May 2021 19:11:37 +0200
+Subject: [PATCH] fix: better serialization from json
+
+
+diff --git a/src/main/java/eu/matherion/api/menu/AbstractMenu.java b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+index e81bead0d96647a7b31d9d3dd5efca18186d7448..474cf856027a48d202d7e64e26b0c7fd0eb03151 100644
+--- a/src/main/java/eu/matherion/api/menu/AbstractMenu.java
++++ b/src/main/java/eu/matherion/api/menu/AbstractMenu.java
+@@ -4,6 +4,7 @@ import eu.matherion.api.item.FinalItemJob;
+ import eu.matherion.api.item.ItemBuilder;
+ import eu.matherion.api.item.ItemPack;
+ import eu.matherion.api.item.response.ItemResponse;
++import eu.matherion.api.item.response.impl.ConsumerItemResponse;
+ import eu.matherion.api.menu.response.WindowResponse;
+ import org.bukkit.Bukkit;
+ import org.bukkit.Material;
+@@ -17,6 +18,7 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
+ import org.bukkit.inventory.Inventory;
+ import org.bukkit.inventory.ItemStack;
+ import org.bukkit.plugin.Plugin;
++import org.bukkit.util.Consumer;
+ 
+ import java.util.*;
+ 
+@@ -251,6 +253,10 @@ public abstract class AbstractMenu implements Listener, WindowResponse {
+         updateInventory();
+     }
+ 
++    public void setItem(int slot, ItemBuilder itemBuilder, Consumer<InventoryClickEvent> onClick) {
++        setItem(slot, itemBuilder, new ConsumerItemResponse(null, onClick, null, null));
++    }
++
+     public void setItem(int slot, WindowItem guiExtenderItem) {
+         jobs.add(new FinalItemJob(slot, guiExtenderItem));
+     }
+diff --git a/src/main/java/eu/matherion/api/servers/data/ServerState.java b/src/main/java/eu/matherion/api/servers/data/ServerState.java
+index 2373f6840885989535cfda2d698ee947ebb4e501..8a2a64ba6f757e3cd51b6d3253e58ff9d724b3fa 100644
+--- a/src/main/java/eu/matherion/api/servers/data/ServerState.java
++++ b/src/main/java/eu/matherion/api/servers/data/ServerState.java
+@@ -1,5 +1,6 @@
+ package eu.matherion.api.servers.data;
+ 
++import com.google.gson.JsonElement;
+ import com.google.gson.JsonObject;
+ import eu.matherion.api.TeamMode;
+ import eu.matherion.api.utils.JsonSerializable;
+@@ -78,7 +79,7 @@ public class ServerState extends JsonSerializable implements Serializable {
+         );
+     }
+ 
+-    public int getId() {
++  public int getId() {
+         return id;
+     }
+ 
+diff --git a/src/main/java/eu/matherion/api/servers/data/ServerStateUpdate.java b/src/main/java/eu/matherion/api/servers/data/ServerStateUpdate.java
+index 199f4730b15e2a8485349264860ae1b78dad9a46..c674fb52feb7e7f762e2c4332caf557bb9a62116 100644
+--- a/src/main/java/eu/matherion/api/servers/data/ServerStateUpdate.java
++++ b/src/main/java/eu/matherion/api/servers/data/ServerStateUpdate.java
+@@ -1,5 +1,6 @@
+ package eu.matherion.api.servers.data;
+ 
++import com.google.gson.JsonElement;
+ import com.google.gson.JsonObject;
+ import com.google.gson.annotations.Expose;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+@@ -19,10 +20,10 @@ public class ServerStateUpdate {
+     }
+ 
+     public ServerStateUpdate(JsonObject obj) {
+-        this(
+-          obj.get("serverName").getAsString(),
+-          new ServerState(obj.get("serverState").getAsJsonObject())
+-        );
++        JsonElement state = obj.get("serverState");
++
++        this.serverName = obj.get("serverName").getAsString();
++        this.serverState = state != null ? new ServerState(state.getAsJsonObject()) : null;
+     }
+ 
+     public String getServerName() {
+diff --git a/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchAllStatesResponse.java b/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchAllStatesResponse.java
+index 79cd9046bd00db4bead3d07136df6d22b4674e5c..4404fdb91d7423e7efab28e871677a55ff954b09 100644
+--- a/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchAllStatesResponse.java
++++ b/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchAllStatesResponse.java
+@@ -1,10 +1,17 @@
+ package eu.matherion.api.servers.data.fetch.response;
+ 
++import com.google.gson.Gson;
++import com.google.gson.JsonElement;
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import com.google.gson.internal.LinkedTreeMap;
+ import eu.matherion.api.servers.data.ServerState;
+ import eu.matherion.api.utils.JsonSerializable;
+ import kong.unirest.json.JSONObject;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+ 
++import java.util.Arrays;
++import java.util.HashMap;
+ import java.util.Map;
+ 
+ public class FetchAllStatesResponse extends JsonSerializable {
+@@ -15,8 +22,21 @@ public class FetchAllStatesResponse extends JsonSerializable {
+     this.states = states == null ? Map.of() : states;
+   }
+ 
++  /**
++   * @deprecated Use {@link FetchAllStatesResponse(JsonObject)}
++   */
++  @Deprecated
+   public FetchAllStatesResponse(JSONObject object) {
+-    this.states = (Map) object.getJSONObject("states").toMap(); // mmmmmm unsafee cast what could go wrong
++    this(new JsonParser().parse(object.toString()).getAsJsonObject());
+   }
+ 
++  public FetchAllStatesResponse(JsonObject object) {
++    var statesArray = object.get("states").getAsJsonObject();
++
++    this.states = new HashMap<>();
++
++    for (Map.Entry<String, JsonElement> stateEntry : statesArray.entrySet()) {
++      this.states.put(stateEntry.getKey(), new ServerState(stateEntry.getValue().getAsJsonObject()));
++    }
++  }
+ }
+diff --git a/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchOneStateResponse.java b/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchOneStateResponse.java
+index afcb2c9d90b55beb8df2997427976aff2ffccd2f..2b8eb459f414144e563edd6a65ff9ff36d40d7a4 100644
+--- a/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchOneStateResponse.java
++++ b/src/main/java/eu/matherion/api/servers/data/fetch/response/FetchOneStateResponse.java
+@@ -1,5 +1,6 @@
+ package eu.matherion.api.servers.data.fetch.response;
+ 
++import com.google.gson.JsonObject;
+ import eu.matherion.api.TeamMode;
+ import eu.matherion.api.servers.data.ServerState;
+ import eu.matherion.api.servers.data.StateType;
+@@ -29,4 +30,8 @@ public class FetchOneStateResponse extends JsonSerializable {
+     );
+   }
+ 
++  public FetchOneStateResponse(JsonObject object) {
++    this.state = new ServerState(object.get("state").getAsJsonObject());
++  }
++
+ }
