@@ -1,0 +1,250 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 17 May 2021 14:59:42 +0200
+Subject: [PATCH] refactor: change handling of messages
+
+
+diff --git a/.factorypath b/.factorypath
+index 640bbdf4f32b77101dd8b70ffa52bc0424091c33..5948f1d5756d278f7223f8c308fc2b97e7dd276d 100644
+--- a/.factorypath
++++ b/.factorypath
+@@ -8,7 +8,16 @@
+     <factorypathentry kind="VARJAR" id="M2_REPO/org/slf4j/slf4j-api/2.0.0-alpha1/slf4j-api-2.0.0-alpha1.jar" enabled="true" runInBatchMode="false"/>
+     <factorypathentry kind="VARJAR" id="M2_REPO/jakarta/websocket/jakarta.websocket-api/2.0.0/jakarta.websocket-api-2.0.0.jar" enabled="true" runInBatchMode="false"/>
+     <factorypathentry kind="VARJAR" id="M2_REPO/com/google/code/gson/gson/2.8.0/gson-2.8.0.jar" enabled="true" runInBatchMode="false"/>
+-    <factorypathentry kind="VARJAR" id="M2_REPO/org/glassfish/tyrus/bundles/tyrus-standalone-client/2.0.0/tyrus-standalone-client-2.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/websocket/websocket-jakarta-client/11.0.2/websocket-jakarta-client-11.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/toolchain/jetty-jakarta-websocket-api/2.0.0/jetty-jakarta-websocket-api-2.0.0.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/websocket/websocket-jakarta-common/11.0.2/websocket-jakarta-common-11.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/websocket/websocket-core-client/11.0.2/websocket-core-client-11.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/websocket/websocket-core-common/11.0.2/websocket-core-common-11.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/jetty-client/11.0.2/jetty-client-11.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/jetty-http/11.0.2/jetty-http-11.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/jetty-util/11.0.2/jetty-util-11.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/jetty-io/11.0.2/jetty-io-11.0.2.jar" enabled="true" runInBatchMode="false"/>
++    <factorypathentry kind="VARJAR" id="M2_REPO/org/eclipse/jetty/jetty-alpn-client/11.0.2/jetty-alpn-client-11.0.2.jar" enabled="true" runInBatchMode="false"/>
+     <factorypathentry kind="VARJAR" id="M2_REPO/org/slf4j/slf4j-simple/1.7.5/slf4j-simple-1.7.5.jar" enabled="true" runInBatchMode="false"/>
+     <factorypathentry kind="VARJAR" id="M2_REPO/net/kyori/adventure-api/4.7.0/adventure-api-4.7.0.jar" enabled="true" runInBatchMode="false"/>
+     <factorypathentry kind="VARJAR" id="M2_REPO/net/kyori/adventure-key/4.7.0/adventure-key-4.7.0.jar" enabled="true" runInBatchMode="false"/>
+diff --git a/pom.xml b/pom.xml
+index 289f8305afe25923b2e8ec8b5a156dae5af292a1..07aa083558ce6de625a0371cd59ed3dc0b1afed8 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -65,10 +65,11 @@
+             <version>2.8.0</version>
+         </dependency>
+         <dependency>
+-            <groupId>org.glassfish.tyrus.bundles</groupId>
+-            <artifactId>tyrus-standalone-client</artifactId>
+-            <version>2.0.0</version>
++            <groupId>org.eclipse.jetty.websocket</groupId>
++            <artifactId>websocket-jakarta-client</artifactId>
++            <version>11.0.2</version>
+         </dependency>
++
+         <!-- because hikari -->
+         <dependency>
+             <groupId>org.slf4j</groupId>
+diff --git a/src/main/java/eu/matherion/server/ayaka/Ayaka.java b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+index b4e38f8583d93dfee0cd59738a467233a3a752f3..20b610bce8d124a1d8803ad3d5b1301674387471 100644
+--- a/src/main/java/eu/matherion/server/ayaka/Ayaka.java
++++ b/src/main/java/eu/matherion/server/ayaka/Ayaka.java
+@@ -1,6 +1,7 @@
+ package eu.matherion.server.ayaka;
+ 
+ import com.google.common.collect.Lists;
++import com.google.gson.Gson;
+ import com.j256.ormlite.dao.Dao;
+ import com.j256.ormlite.stmt.DeleteBuilder;
+ import eu.matherion.api.database.DatabaseManager;
+@@ -103,9 +104,12 @@ public class Ayaka implements ServerPubSub {
+   }
+ 
+   private void setupClient() {
+-    this.wsClient.setAyakaMessageHandler((action, data) -> {
+-      if (action.equals("stateUpdate")) {
+-        stateUpdateSubscribers.forEach(subscriber -> subscriber.accept((ServerStateUpdate) data));
++    this.wsClient.setAyakaMessageHandler((event) -> {
++      if (event.getEventName().equals("stateUpdate")) {
++        ServerStateUpdate update = event.reflectData(ServerStateUpdate.class);
++        if (update == null) return;
++
++        stateUpdateSubscribers.forEach(subscriber -> subscriber.accept(update));
+       }
+     });
+ 
+diff --git a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+index f7ff9c0886e0ef660d6e75fbb00df2efc0d31d30..97540498edf047e60e0f38f41161ecc3d594ca21 100644
+--- a/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
++++ b/src/main/java/eu/matherion/server/ayaka/AyakaWebSocketClient.java
+@@ -1,6 +1,11 @@
+ package eu.matherion.server.ayaka;
+ 
+ import com.google.gson.Gson;
++import com.google.gson.JsonElement;
++import com.google.gson.JsonObject;
++import com.google.gson.JsonParser;
++import com.google.gson.reflect.TypeToken;
++import eu.matherion.api.servers.data.ServerStateUpdate;
+ import eu.matherion.api.servers.pubsub.message.Event;
+ import eu.matherion.server.ayaka.handler.AyakaMessageHandler;
+ import eu.matherion.server.ayaka.json.JsonEncoder;
+@@ -33,11 +38,14 @@ public class AyakaWebSocketClient extends Endpoint {
+ 
+   private boolean reconnect = true;
+ 
++  private boolean isReceiver;
++
+   private int connectAttempts = 0;
+ 
+-  public AyakaWebSocketClient(URI uri, String sessionId) {
++  public AyakaWebSocketClient(URI uri, String sessionId, boolean isReceiver) {
+     this.uri = uri.resolve("/ws");
+     this.sessionId = sessionId;
++    this.isReceiver = isReceiver;
+ 
+     ClientEndpointConfig.Builder configBuilder = ClientEndpointConfig.Builder.create();
+     configBuilder.configurator(new ClientEndpointConfig.Configurator() {
+@@ -50,27 +58,23 @@ public class AyakaWebSocketClient extends Endpoint {
+     this.clientEndpointConfig = configBuilder.build();
+   }
+ 
++  public AyakaWebSocketClient(URI uri, String sessionId) {
++    this(uri, sessionId, true);
++  }
++
+   /**
+    * Connect to the WebSocket
+    */
+   public void connect() {
+     try {
+-      connectAttempts++;
+-      Bukkit.getLogger().info(String.format("[Ayaka] Connection attempt #%s...", connectAttempts));
++      Bukkit.getLogger().info(String.format("[Ayaka] Connecting...", connectAttempts));
+ 
+       WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+       container.connectToServer(this, clientEndpointConfig, this.uri);
+-
+-      connectAttempts = 0;
+     } catch (Exception e) {
+       Bukkit.getLogger().severe(String.format("[Ayaka] Connection attempt #%s failed, retrying in 5s.", connectAttempts));
+       Bukkit.getLogger().severe(String.format("[Ayaka] Error: %s", e.getMessage()));
+-      try {
+-        Thread.sleep(5000);
+-        connect();
+-      } catch (InterruptedException ex) {
+-        ex.printStackTrace();
+-      }
++      connect();
+     }
+   }
+ 
+@@ -80,13 +84,21 @@ public class AyakaWebSocketClient extends Endpoint {
+    * @param session The WebSocket session
+    */
+   @OnOpen
+-  @Override
+   public void onOpen(Session session, EndpointConfig config) {
+-    this.session = session;
+-    Bukkit.getLogger().info("[Ayaka] Connected to WebSocket @ " + this.uri.toString());
+-
+-    Bukkit.getLogger().info("[PubSub] Pushing initial server state");
+-    Bukkit.getServer().pushServerState();
++    try {
++      this.session = session;
++      Bukkit.getLogger().info("[Ayaka] Connected to WebSocket @ " + this.uri.toString());
++
++      // do not replace with lambda it fucks up!!!!!
++      session.addMessageHandler(new MessageHandler.Whole<String>() {
++        @Override
++        public void onMessage(String message) {
++          handleMessage(message);
++        }
++      });
++    } catch (Exception e) {
++      e.printStackTrace();
++    }
+   }
+ 
+   /**
+@@ -94,18 +106,21 @@ public class AyakaWebSocketClient extends Endpoint {
+    *
+    * @param str The message
+    */
+-  @OnMessage
+-  public void onMessage(String str) {
++  public void handleMessage(String str) {
++    if (str.equals("")) return; // keep-alive
++
+     try {
+       // Not using a JsonDecoder as there would have to
+       // be a specific one for the Event class.
+-      Event event = gson.fromJson(str, Event.class);
++      JsonObject event = new JsonParser().parse(str).getAsJsonObject();
+ 
+       // Runs the MessageHandler if it's set.
+       if (ayakaMessageHandler != null) {
+-        ayakaMessageHandler.accept(event.event, event.data);
++        System.out.println("handler not null");
++       ayakaMessageHandler.accept(new Event(event));
+       }
+-    } catch (Exception ignored) {
++    } catch (Exception e) {
++      e.printStackTrace();
+       // This exception is ignored. If the message failed, it was malformed
+       // and thus is not supposed to be handled.
+     }
+@@ -115,7 +130,6 @@ public class AyakaWebSocketClient extends Endpoint {
+    * WebSocket Close Handler
+    */
+   @OnClose
+-  @Override
+   public void onClose(Session session, CloseReason closeReason) {
+     Bukkit.getLogger().warning("[Ayaka] Connection to WebSocket closed.");
+ 
+diff --git a/src/main/java/eu/matherion/server/ayaka/handler/AyakaMessageHandler.java b/src/main/java/eu/matherion/server/ayaka/handler/AyakaMessageHandler.java
+index 05b890f1f6f34338e8052330866677ea07d326cc..fa0e938bb3713933433bfa1c3733e6cf4443ade4 100644
+--- a/src/main/java/eu/matherion/server/ayaka/handler/AyakaMessageHandler.java
++++ b/src/main/java/eu/matherion/server/ayaka/handler/AyakaMessageHandler.java
+@@ -1,6 +1,8 @@
+ package eu.matherion.server.ayaka.handler;
+ 
+-import java.util.function.BiConsumer;
++import eu.matherion.api.servers.pubsub.message.Event;
+ 
+-public interface AyakaMessageHandler extends BiConsumer<String, Object> {
++import java.util.function.Consumer;
++
++public interface AyakaMessageHandler extends Consumer<Event> {
+ }
+diff --git a/src/main/java/net/minecraft/server/players/PlayerList.java b/src/main/java/net/minecraft/server/players/PlayerList.java
+index 347f21147b78e2312e5ae5ae246df0d0e10c99d8..0913fbbe6ffa4e4b059fef0b79d558c41a3cebe9 100644
+--- a/src/main/java/net/minecraft/server/players/PlayerList.java
++++ b/src/main/java/net/minecraft/server/players/PlayerList.java
+@@ -427,8 +427,8 @@ public abstract class PlayerList {
+         if (cserver.getServerState() != null) {
+             cserver.getServerState().setOnline(getPlayerCount());
+             cserver.getServerState().setMax(getMaxPlayers());
++            cserver.pushServerState();
+         }
+-        cserver.pushServerState();
+     }
+     // Matherion end
+ 
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index a23152aa24ed6bce1fa50643495b0542f479f2f5..22b29bba913691d76067559838852d47f4ffe5a2 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -993,12 +993,6 @@ public final class CraftServer implements Server {
+ 
+         this.serverState = createServerState();
+         this.pubSub = pubSub;
+-
+-        pubSub.addServerStateUpdateSubscriber(serverStateUpdate -> {
+-            System.out.println("----update----");
+-            System.out.println(serverStateUpdate);
+-            System.out.println("----update----");
+-        });
+     }
+ 
+     public void unloadPubSub() {

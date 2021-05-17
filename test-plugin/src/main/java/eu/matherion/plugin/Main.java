@@ -1,5 +1,7 @@
 package eu.matherion.plugin;
 
+import eu.matherion.api.servers.data.ServerStateUpdate;
+import eu.matherion.api.servers.pubsub.subscriber.ServerStateUpdateSubscriber;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -10,8 +12,13 @@ public class Main extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+        System.out.println("MEOWMEOW");
         super.onEnable();
         this.getServer().getPluginManager().registerEvents(this, this);
+        this.getServer().getPubSub().addServerStateUpdateSubscriber(serverStateUpdate -> {
+            getLogger().info("TEST FROM PLUGIN");
+            System.out.println(serverStateUpdate);
+        });
     }
 
    /* @EventHandler

@@ -1,0 +1,139 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Mia <vottus@vott.us>
+Date: Mon, 17 May 2021 15:00:15 +0200
+Subject: [PATCH] refactor: changes to the pubsub api [bc break]
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/util/SneakyThrow.java b/src/main/java/com/destroystokyo/paper/util/SneakyThrow.java
+index 9db0056ab94145819628b3ad8d8d26130d117fcf..b27281a6538cb223f6dffbf3859366dedbbf75f1 100644
+--- a/src/main/java/com/destroystokyo/paper/util/SneakyThrow.java
++++ b/src/main/java/com/destroystokyo/paper/util/SneakyThrow.java
+@@ -5,7 +5,7 @@ import org.jetbrains.annotations.NotNull;
+ public class SneakyThrow {
+ 
+     public static void sneaky(@NotNull Throwable exception) {
+-        SneakyThrow.<RuntimeException>throwSneaky(exception);
++        SneakyThrow.throwSneaky(exception);
+     }
+ 
+     @SuppressWarnings("unchecked")
+diff --git a/src/main/java/eu/matherion/api/servers/data/ServerState.java b/src/main/java/eu/matherion/api/servers/data/ServerState.java
+index 125382fa6b199a606bc638a83397a424db35cc57..2373f6840885989535cfda2d698ee947ebb4e501 100644
+--- a/src/main/java/eu/matherion/api/servers/data/ServerState.java
++++ b/src/main/java/eu/matherion/api/servers/data/ServerState.java
+@@ -1,5 +1,6 @@
+ package eu.matherion.api.servers.data;
+ 
++import com.google.gson.JsonObject;
+ import eu.matherion.api.TeamMode;
+ import eu.matherion.api.utils.JsonSerializable;
+ import kong.unirest.json.JSONObject;
+@@ -65,6 +66,18 @@ public class ServerState extends JsonSerializable implements Serializable {
+         );
+     }
+ 
++    public ServerState(JsonObject object) {
++        this(
++          object.get("id").getAsInt(),
++          object.get("name").getAsString(),
++          object.has("teamMode") ? TeamMode.valueOf(object.get("teamMode").getAsString()) : null,
++          StateType.valueOf(object.get("stateType").getAsString()),
++          object.get("privateServer").getAsBoolean(),
++          object.get("online").getAsInt(),
++          object.get("max").getAsInt()
++        );
++    }
++
+     public int getId() {
+         return id;
+     }
+diff --git a/src/main/java/eu/matherion/api/servers/data/ServerStateUpdate.java b/src/main/java/eu/matherion/api/servers/data/ServerStateUpdate.java
+index 5b40778e59a694c0049cbf1658964111b6d8f88d..199f4730b15e2a8485349264860ae1b78dad9a46 100644
+--- a/src/main/java/eu/matherion/api/servers/data/ServerStateUpdate.java
++++ b/src/main/java/eu/matherion/api/servers/data/ServerStateUpdate.java
+@@ -1,22 +1,30 @@
+ package eu.matherion.api.servers.data;
+ 
++import com.google.gson.JsonObject;
+ import com.google.gson.annotations.Expose;
+ import org.checkerframework.checker.nullness.qual.Nullable;
+ 
+ public class ServerStateUpdate {
+ 
+-    @Expose
+-    public final String serverName;
++    public String serverName;
+ 
+     @Nullable
+-    @Expose
+-    public final ServerState serverState;
++    public ServerState serverState;
++
++    public ServerStateUpdate() {}
+ 
+     public ServerStateUpdate(String serverName, @Nullable ServerState serverState) {
+         this.serverName = serverName;
+         this.serverState = serverState;
+     }
+ 
++    public ServerStateUpdate(JsonObject obj) {
++        this(
++          obj.get("serverName").getAsString(),
++          new ServerState(obj.get("serverState").getAsJsonObject())
++        );
++    }
++
+     public String getServerName() {
+         return serverName;
+     }
+diff --git a/src/main/java/eu/matherion/api/servers/pubsub/message/Event.java b/src/main/java/eu/matherion/api/servers/pubsub/message/Event.java
+index 8b4da1ec83794515f1e632772133e01bbb1c44d6..dc10b214829440be43262e38718dd9aa527bdfb4 100644
+--- a/src/main/java/eu/matherion/api/servers/pubsub/message/Event.java
++++ b/src/main/java/eu/matherion/api/servers/pubsub/message/Event.java
+@@ -1,14 +1,43 @@
+ package eu.matherion.api.servers.pubsub.message;
+ 
+-public class Event<T> {
++import com.google.gson.JsonObject;
++
++import java.lang.reflect.InvocationTargetException;
++
++public class Event {
+ 
+   public String event;
+ 
+-  public T data;
++  public JsonObject data;
++
++  public Event() {}
+ 
+-  public Event(String event, T data) {
++  public Event(String event, JsonObject data) {
+     this.event = event;
+     this.data = data;
+   }
+ 
++  public Event(JsonObject event) {
++    this(
++      event.get("event").getAsString(),
++      event.get("data").getAsJsonObject()
++    );
++  }
++
++  public String getEventName() {
++    return event;
++  }
++
++  public JsonObject getData() {
++    return data;
++  }
++
++  public <T> T reflectData(Class<? extends T> clazz) {
++    try {
++      return clazz.getConstructor(JsonObject.class).newInstance(getData());
++    } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
++      e.printStackTrace();
++      return null;
++    }
++  }
+ }
