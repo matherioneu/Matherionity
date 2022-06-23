@@ -1,5 +1,7 @@
 # Matherionity
 
+## This Tuinity fork is no longer used on the Matherion.eu servers. The development team will not continue development.
+
 The truly batteries-included Paper/Tuinity fork.
 
 ## The new API
@@ -11,8 +13,9 @@ are subject to change, however that may only happen in major releases.
 
 ## Features
 - Redis
-- Database Connection
+- Database Connection (ORM Lite Entity Framework)
 - New Plugin Manager, inspired by Velocity (TBD)
+- Server Sync through network 
 
 ## Requirements
 - Java 15+
